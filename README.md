@@ -6,7 +6,7 @@ Streamlit-Tool, das eine Monats-Gehaltsliste (Excel) von Mietwagen-Mandanten in 
 
 ## Live-App
 
-➡️ **https://USERNAME.github.io/REPO/** (wird nach Deploy gesetzt)
+➡️ **https://guley1995.github.io/gehaltsliste-datev/**
 
 ## Was die App macht
 
@@ -53,7 +53,7 @@ streamlit run app.py
 
 ## Deploy
 
-Automatisch via GitHub Pages: jeder Push auf `main` wird live unter `https://USERNAME.github.io/REPO/`.
+Automatisch via GitHub Pages: jeder Push auf `main` wird live unter https://guley1995.github.io/gehaltsliste-datev/.
 
 ## Files
 
