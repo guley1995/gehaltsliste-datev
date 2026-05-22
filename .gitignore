@@ -1,0 +1,25 @@
+# Echte Lohndaten NIE ins Repo!
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+
+# Bilder/Screenshots vom Kunden
+*.HEIC
+*.heic
+*.MOV
+*.mov
+*.jpg
+*.jpeg
+*.png
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store

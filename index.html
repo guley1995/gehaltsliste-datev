@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gehaltsliste → DATEV</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@stlite/browser@1.7.3/build/stlite.css" />
+  <style>
+    html, body, #root { height: 100%; margin: 0; }
+    #boot {
+      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+      font-family: -apple-system, system-ui, sans-serif; color: #555;
+      background: #fafafa;
+    }
+  </style>
+</head>
+<body>
+  <div id="boot">Lade Python-Runtime (einmalig ~10 Sekunden) …</div>
+  <div id="root"></div>
+
+  <script type="module">
+    import { mount } from "https://cdn.jsdelivr.net/npm/@stlite/browser@1.7.3/build/stlite.js";
+
+    mount(
+      {
+        requirements: ["openpyxl"],
+        entrypoint: "app.py",
+        files: {
+          "app.py":     { url: "./app.py" },
+          "parser.py":  { url: "./parser.py" },
+          "writer.py":  { url: "./writer.py" },
+          "mapping.py": { url: "./mapping.py" },
+        },
+      },
+      document.getElementById("root"),
+    ).then(() => {
+      document.getElementById("boot")?.remove();
+    });
+  </script>
+</body>
+</html>
