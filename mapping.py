@@ -15,9 +15,12 @@ LOHNART_MAPPING = [
 ]
 
 UNGEKLAERTE_SPALTEN = [
-    {"excel_col": "K", "excel_header": "€. Grundgehalt",          "hinweis": "Festbezug? LA-Nummer noch klären."},
     {"excel_col": "L", "excel_header": "Vorschuss",               "hinweis": "LA-Nummer für Vorschuss noch klären."},
     {"excel_col": "O", "excel_header": "Fughafengebühr",          "hinweis": "LA-Nummer für Flughafengebühr noch klären."},
     {"excel_col": "Q", "excel_header": "Urlaub",                  "hinweis": "Als Lohnart oder Abwesenheitstage? Klären."},
     {"excel_col": "R", "excel_header": "Krank",                   "hinweis": "Als Lohnart oder AU-Tage? Klären."},
 ]
+
+# Spalte K (€. Grundgehalt) wird in der Excel als B*C berechnet und dient
+# nur als Soll-Wert zur Kontrolle nach dem DATEV-Import. NICHT importieren.
+KONTROLL_GRUNDGEHALT_COL = "K"

@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Tuple
 
 import openpyxl
 
-from mapping import LOHNART_MAPPING, UNGEKLAERTE_SPALTEN
+from mapping import KONTROLL_GRUNDGEHALT_COL, LOHNART_MAPPING, UNGEKLAERTE_SPALTEN
 
 UEBERSICHT_SHEET = "Gehalt"
 NAME_COL = "A"
@@ -23,6 +23,7 @@ class MitarbeiterZeile:
     pers_nr: Optional[str]
     werte: Dict[str, float] = field(default_factory=dict)
     ungeklaerte_werte: Dict[str, float] = field(default_factory=dict)
+    soll_grundgehalt: float = 0.0
     info: Optional[str] = None
     warnungen: List[str] = field(default_factory=list)
 
@@ -81,6 +82,7 @@ def parse_excel(file_bytes: bytes) -> ParseResult:
 
     mapped_cols = [(m, _col_letter_to_index(m["excel_col"])) for m in LOHNART_MAPPING]
     unklare_cols = [(u, _col_letter_to_index(u["excel_col"])) for u in UNGEKLAERTE_SPALTEN]
+    kontroll_col_idx = _col_letter_to_index(KONTROLL_GRUNDGEHALT_COL)
 
     mitarbeiter: List[MitarbeiterZeile] = []
 
@@ -112,6 +114,8 @@ def parse_excel(file_bytes: bytes) -> ParseResult:
             val = _zahl(ws.cell(r, col_idx).value)
             if val != 0:
                 zeile.ungeklaerte_werte[u["excel_header"]] = val
+
+        zeile.soll_grundgehalt = _zahl(ws.cell(r, kontroll_col_idx).value)
 
         mitarbeiter.append(zeile)
 

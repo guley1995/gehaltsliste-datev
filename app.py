@@ -129,11 +129,17 @@ for v in verarbeitet:
         tab_data, tab_warn, tab_csv = st.tabs(["Vorschau Daten", "Warnungen", "CSV-Inhalt"])
 
         with tab_data:
+            st.caption(
+                "Letzte Spalte „Soll-Grundgehalt €" ist nur Kontrolle (Excel-Spalte K = "
+                "Stundensatz × Arbeitsstunden) — nicht im DATEV-Import enthalten, "
+                "aber nach Import in DATEV zum Abgleich nutzbar."
+            )
             zeilen = []
             for ma in parse.mitarbeiter:
                 row = {"PersNr": ma.pers_nr or "—", "Name": ma.name}
                 for m in LOHNART_MAPPING:
                     row[f'{m["lohnart"]} {m["label"]}'] = ma.werte.get(m["lohnart"], "")
+                row["Soll-Grundgehalt €"] = round(ma.soll_grundgehalt, 2) if ma.soll_grundgehalt else ""
                 zeilen.append(row)
             st.dataframe(zeilen, hide_index=True, use_container_width=True)
 
