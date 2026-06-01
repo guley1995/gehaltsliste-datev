@@ -174,6 +174,114 @@ with st.sidebar:
         hide_index=True, use_container_width=True,
     )
 
+    st.divider()
+    with st.expander("📖 DATEV-Profil einrichten (einmalig pro Mandant)"):
+        st.markdown(
+            """
+**Bevor der erste Import funktioniert**, musst du in DATEV Lohn und Gehalt
+**einmal pro Mandant** ein ASCII-Importprofil anlegen.
+Dauer: ca. 20 Min. Danach läuft jeder Monatslauf automatisch.
+
+---
+
+### Schritt 1: Assistent öffnen
+
+```
+DATEV Lohn und Gehalt öffnen
+  → Mandant öffnen (z.B. Wittys)
+  → Menüleiste oben:  Extras
+                        └→ ASCII-Import Assistent
+```
+
+Beim ersten Aufruf: Profil-Übersicht ist leer. Klick **„Neu"** /
+**„Hinzufügen"**.
+
+### Schritt 2: Profil-Grunddaten
+
+| Was DATEV fragt | Was du einträgst |
+|---|---|
+| Profilname | `Mietwagen Monatswerte` (oder ähnlich) |
+| Was wird importiert? | **Bewegungsdaten** |
+| Importart | **ASCII / Trennzeichen-getrennt** |
+
+### Schritt 3: Datei-Format
+
+| Feld | Wert |
+|---|---|
+| Feldtrennzeichen | **Semikolon** `;` |
+| Stringbegrenzer | (keiner / leer) |
+| Kopfzeile vorhanden? | **Nein** — unsere CSV hat keinen Header |
+| Zeichensatz | **ANSI / Windows-1252 / CP1252** |
+| Datumsformat | **TT.MM.JJJJ** |
+| Dezimaltrennzeichen | **Komma** |
+
+### Schritt 4: Feldzuordnung (das Wichtigste)
+
+Hier sagst du DATEV, welche Spalte unserer CSV welches DATEV-Feld ist.
+**Reihenfolge exakt so:**
+
+| CSV-Spalte | DATEV-Feld |
+|:---:|---|
+| 1 | **Personalnummer** |
+| 2 | **Kalendertag** |
+| 3 | **Ausfallschlüssel** |
+| 4 | **Lohnartennummer** |
+| 5 | **Stundenanzahl** |
+| 6 | **Tagesanzahl** |
+| 7 | **Wert / Betrag** |
+| 8 | **Abweichender Faktor** |
+| 9 | **Abweichende Lohnveränderung** |
+| 10 | **Kostenstellennummer** |
+| 11 | **Kostenträger** |
+
+→ **Profil speichern.** Fertig.
+
+---
+
+### Schritt 5: Monatlicher Import
+
+```
+DATEV Lohn und Gehalt
+  → Mandant öffnen
+  → Erfassen → Bewegungsdaten → Importieren
+  → Profil auswählen: „Mietwagen Monatswerte"
+  → Datei auswählen: die hier heruntergeladene .csv
+  → Importieren
+```
+
+DATEV zeigt „X Sätze erfolgreich importiert" — Monatserfassung ist
+befüllt.
+
+---
+
+### Tutorials mit Screenshots (externe Quellen)
+
+- **[PlanD-Anleitung mit Screenshots](https://help.pland.app/de/articles/146082-zeiterfassung-in-datev-lohn-und-gehalt-importieren)** — sehr ausführlich, identisches Konzept
+- **[SaaS DATEV-Import](https://hilfe.saas.de/hilfesaas_v2/urlaubsverwaltung/datev-ascii-import)** — 6-Schritt-Anleitung
+- **[DATEV-Community Thread 77249](https://www.datev-community.de/t5/Personalwirtschaft/Lohn-Gehalt-Stundendaten-ASCII-Import/td-p/77249)** — andere Lohnbüros mit gleicher Frage
+- **[Offizielle DATEV-Hilfecenter Doknr. 9219371](https://apps.datev.de/help-center/documents/9219371)** — Original-Doku (Login nötig)
+
+### Troubleshooting
+
+- **„LN01143" Fehlermeldung** beim Import → Personalnummer in der CSV ist
+  in DATEV nicht angelegt. Mitarbeiter-Stamm prüfen.
+- **„Lohnart nicht im Lohnartenstamm"** → die LA-Nummer (z.B. 9651) ist
+  bei diesem Mandanten nicht angelegt. Stamm: `Stammdaten → Abrechnung
+  → Lohnarten` und LA anlegen.
+- **Umlaute zerschossen** (`?` statt `ü`) → Encoding stimmt nicht.
+  In der Sidebar oben Encoding auf `utf-8` umstellen ODER im DATEV-Profil
+  auf ANSI bleiben und unsere CSV als CP1252 (Default) lassen.
+- **Datum-Fehler** → DATEV-Profil-Datumsformat muss `TT.MM.JJJJ` sein.
+
+### Wer kann helfen?
+
+- **DATEV-Hotline:** `0911/319-0` → Personalwirtschaft → Lohn und Gehalt.
+  Die richten dir das Profil per Bildschirmübertragung in ~15 Min ein.
+- **Bei mir** (Hue.IT): Screenshot/Beschreibung der Fehlermeldung
+  schicken, dann passen wir das CSV-Format oder das Profil an.
+"""
+        )
+
 
 # ─── Excel-Upload ─────────────────────────────────────────────────────
 uploads = st.file_uploader("Excel-Dateien (eine pro Mandant/Monat)",
