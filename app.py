@@ -1,26 +1,49 @@
-"""Stage 2 minus data_editor — PersNr-Editor via Textarea statt data_editor."""
+"""Gehaltsliste → DATEV CSV. text_input pro Mitarbeiter (data_editor hängt in stlite)."""
+import hashlib
 import io
 import json
 import zipfile
 
 import streamlit as st
 
+from config import LOGO_TAGLINE, LOGO_TEXT, LOGO_URL, PASSWORT_AKTIV, PASSWORT_HASH
 from mapping import LOHNART_MAPPING, MANUELL_IN_DATEV
 from parser import firma_aus_dateiname, monat_jahr_aus_dateiname, parse_excel
 from writer import baue_csv, csv_bytes
 
 st.set_page_config(page_title="Gehaltsliste → DATEV", layout="wide")
 
+# --- Logo / Header ---
+if LOGO_URL:
+    logo_inner = f'<img src="{LOGO_URL}" alt="{LOGO_TEXT}" style="height:36px;">'
+else:
+    logo_inner = (
+        f'<div style="background:#0f62fe;color:white;padding:6px 14px;border-radius:8px;'
+        f'font-weight:700;font-size:18px;letter-spacing:0.5px;">{LOGO_TEXT}</div>'
+    )
+
 st.markdown(
-    """
+    f"""
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:4px;">
-      <div style="background:#0f62fe;color:white;padding:6px 14px;border-radius:8px;
-                  font-weight:700;font-size:18px;letter-spacing:0.5px;">Hue.IT</div>
-      <div style="color:#888;font-size:13px;">DATEV-Tools für Lohnbüros</div>
+      {logo_inner}
+      <div style="color:#888;font-size:13px;">{LOGO_TAGLINE}</div>
     </div>
     """,
     unsafe_allow_html=True,
 )
+
+# --- Passwort-Vorhang (clientseitig, "Schutz light") ---
+if PASSWORT_AKTIV and not st.session_state.get("auth_ok"):
+    st.title("🔒 Zugang")
+    st.caption("Bitte Passwort eingeben.")
+    pw = st.text_input("Passwort", type="password", key="pw_input")
+    if pw:
+        if hashlib.sha256(pw.encode()).hexdigest() == PASSWORT_HASH:
+            st.session_state["auth_ok"] = True
+            st.rerun()
+        else:
+            st.error("Falsches Passwort.")
+    st.stop()
 
 st.title("Gehaltsliste → DATEV Lohn und Gehalt")
 st.caption("Excel hochladen → CSV erzeugen. Daten bleiben im Browser.")
@@ -128,6 +151,18 @@ for f in uploads:
     st.download_button("⬇️ CSV herunterladen", data=data, file_name=out_name,
                        mime="text/csv", key=f"dl_{f.name}",
                        type="primary", use_container_width=True)
+
+    st.success(
+        "**So importierst du die CSV in DATEV Lohn und Gehalt:**\n\n"
+        "1. DATEV LuG öffnen, **Mandant Wittys** (oder entsprechend) wählen\n"
+        "2. Menü **`Erfassen → Bewegungsdaten → Importieren`**\n"
+        "3. **Importprofil wählen** (einmalig vorher angelegt unter "
+        "`Extras → ASCII-Import Assistent`: 11 Spalten, Trennzeichen Semikolon, "
+        "Encoding ANSI/CP1252)\n"
+        "4. Heruntergeladene CSV auswählen → **Importieren**\n\n"
+        "⚠️ Bei Personalnummern wie `2.1`, `12.1` ggf. prüfen, ob DATEV nur ganzzahlige "
+        "PersNr akzeptiert. Krank-Tage werden separat in DATEV-Kalender gepflegt (nicht in CSV)."
+    )
 
     with st.expander("Werte-Vorschau"):
         zeilen = []
