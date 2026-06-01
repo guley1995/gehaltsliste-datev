@@ -10,7 +10,7 @@ import zipfile
 
 import streamlit as st
 
-from mapping import LOHNART_MAPPING, UNGEKLAERTE_SPALTEN
+from mapping import LOHNART_MAPPING, MANUELL_IN_DATEV
 from parser import monat_jahr_aus_dateiname, parse_excel
 from writer import baue_csv, csv_bytes
 
@@ -41,12 +41,13 @@ with st.sidebar:
         hide_index=True,
         use_container_width=True,
     )
-    st.subheader("Ungeklärte Spalten")
-    st.caption("Werden NICHT in die CSV geschrieben — bitte LA-Nummern klären.")
+    st.subheader("Manuell in DATEV erfassen")
+    st.caption("Werden NICHT in die CSV geschrieben — über DATEV-Maske/Kalender pflegen.")
     st.dataframe(
         [
-            {"Excel-Spalte": u["excel_col"], "Header": u["excel_header"], "Hinweis": u["hinweis"]}
-            for u in UNGEKLAERTE_SPALTEN
+            {"Excel-Spalte": u["excel_col"], "Header": u["excel_header"],
+             "Lohnart": u["lohnart"], "Hinweis": u["hinweis"]}
+            for u in MANUELL_IN_DATEV
         ],
         hide_index=True,
         use_container_width=True,
@@ -144,8 +145,8 @@ for v in verarbeitet:
             st.dataframe(zeilen, hide_index=True, use_container_width=True)
 
         with tab_warn:
-            mit_unklar = [ma for ma in parse.mitarbeiter if ma.ungeklaerte_werte or ma.warnungen or ma.info]
-            if not mit_unklar and not stat["uebersprungen_keine_persnr"] and not stat["uebersprungen_keine_werte"]:
+            mit_hinweis = [ma for ma in parse.mitarbeiter if ma.manuell_werte or ma.warnungen or ma.info]
+            if not mit_hinweis and not stat["uebersprungen_keine_persnr"] and not stat["uebersprungen_keine_werte"]:
                 st.success("Keine Warnungen.")
             if stat["uebersprungen_keine_persnr"]:
                 st.warning(
@@ -157,11 +158,13 @@ for v in verarbeitet:
                     "Übersprungen — keine Werte in den gemappten Spalten: "
                     + ", ".join(stat["uebersprungen_keine_werte"])
                 )
-            for ma in mit_unklar:
+            if mit_hinweis:
+                st.markdown("**Mitarbeiter mit manuellen Nachträgen oder Info-Notizen:**")
+            for ma in mit_hinweis:
                 zeilen = []
-                if ma.ungeklaerte_werte:
-                    for header, val in ma.ungeklaerte_werte.items():
-                        zeilen.append(f"  • {header}: {val}")
+                if ma.manuell_werte:
+                    for header, val in ma.manuell_werte.items():
+                        zeilen.append(f"  • {header}: {val} → manuell in DATEV erfassen")
                 if ma.warnungen:
                     for w in ma.warnungen:
                         zeilen.append(f"  ⚠ {w}")

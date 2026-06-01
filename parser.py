@@ -11,7 +11,12 @@ from typing import Dict, List, Optional, Tuple
 
 import openpyxl
 
-from mapping import KONTROLL_GRUNDGEHALT_COL, LOHNART_MAPPING, UNGEKLAERTE_SPALTEN
+from mapping import (
+    KONTROLL_GRUNDGEHALT_COL,
+    LOHNART_MAPPING,
+    MANUELL_IN_DATEV,
+    STUNDENSATZ_COL,
+)
 
 UEBERSICHT_SHEET = "Gehalt"
 NAME_COL = "A"
@@ -21,8 +26,9 @@ NAME_COL = "A"
 class MitarbeiterZeile:
     name: str
     pers_nr: Optional[str]
+    stundensatz: float = 0.0
     werte: Dict[str, float] = field(default_factory=dict)
-    ungeklaerte_werte: Dict[str, float] = field(default_factory=dict)
+    manuell_werte: Dict[str, float] = field(default_factory=dict)
     soll_grundgehalt: float = 0.0
     info: Optional[str] = None
     warnungen: List[str] = field(default_factory=list)
@@ -81,8 +87,9 @@ def parse_excel(file_bytes: bytes) -> ParseResult:
     info_col_idx = _col_letter_to_index("W")
 
     mapped_cols = [(m, _col_letter_to_index(m["excel_col"])) for m in LOHNART_MAPPING]
-    unklare_cols = [(u, _col_letter_to_index(u["excel_col"])) for u in UNGEKLAERTE_SPALTEN]
+    manuell_cols = [(u, _col_letter_to_index(u["excel_col"])) for u in MANUELL_IN_DATEV]
     kontroll_col_idx = _col_letter_to_index(KONTROLL_GRUNDGEHALT_COL)
+    stundensatz_col_idx = _col_letter_to_index(STUNDENSATZ_COL)
 
     mitarbeiter: List[MitarbeiterZeile] = []
 
@@ -105,15 +112,26 @@ def parse_excel(file_bytes: bytes) -> ParseResult:
         else:
             zeile.warnungen.append("Kein eigenes Mitarbeiter-Sheet gefunden (Tabname fehlt).")
 
+        zeile.stundensatz = _zahl(ws.cell(r, stundensatz_col_idx).value)
+
         for m, col_idx in mapped_cols:
             val = _zahl(ws.cell(r, col_idx).value)
-            if val != 0:
-                zeile.werte[m["lohnart"]] = val
+            if val == 0:
+                continue
+            if m.get("umrechnen") == "eur_durch_stundensatz":
+                if zeile.stundensatz <= 0:
+                    zeile.warnungen.append(
+                        f"{m['label']}: Umrechnung €→Std nicht möglich, "
+                        f"Stundensatz fehlt oder ist 0 (Excel-Spalte {STUNDENSATZ_COL})."
+                    )
+                    continue
+                val = val / zeile.stundensatz
+            zeile.werte[m["lohnart"]] = round(val, 2)
 
-        for u, col_idx in unklare_cols:
+        for u, col_idx in manuell_cols:
             val = _zahl(ws.cell(r, col_idx).value)
             if val != 0:
-                zeile.ungeklaerte_werte[u["excel_header"]] = val
+                zeile.manuell_werte[u["excel_header"]] = val
 
         zeile.soll_grundgehalt = _zahl(ws.cell(r, kontroll_col_idx).value)
 
