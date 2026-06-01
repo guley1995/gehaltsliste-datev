@@ -149,3 +149,17 @@ def monat_jahr_aus_dateiname(filename: str) -> Optional[Tuple[int, int]]:
     if 1 <= monat <= 12 and 2000 <= jahr <= 2100:
         return (jahr, monat)
     return None
+
+
+def firma_aus_dateiname(filename: str) -> str:
+    """'Gehaltsliste_2026_3 Wittys.xlsx' -> 'Wittys'.
+    'Gehaltsliste 2026-05 Firma B.xlsx' -> 'Firma B'.
+    Fallback: Dateiname ohne Extension."""
+    base = re.sub(r"\.xlsx?$", "", filename, flags=re.IGNORECASE)
+    m = re.search(r"\d{4}[_\-\s]\d{1,2}\s+(.+)$", base)
+    if m:
+        return m.group(1).strip()
+    m = re.search(r"\d{4}[_\-\s]\d{1,2}[_\-\s]+(.+)$", base)
+    if m:
+        return m.group(1).strip()
+    return base.strip()
