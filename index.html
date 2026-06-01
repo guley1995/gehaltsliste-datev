@@ -21,16 +21,20 @@
   <script type="module">
     import { mount } from "https://cdn.jsdelivr.net/npm/@stlite/browser@1.7.3/build/stlite.js";
 
+    // Cache-Buster: GitHub Pages cached aggressiv. Bei jedem Reload sicherstellen,
+    // dass die aktuellsten Python-Files geladen werden.
+    const v = "?v=" + Date.now();
+
     mount(
       {
         requirements: ["openpyxl"],
         entrypoint: "app.py",
         files: {
-          "app.py":     { url: "./app.py" },
-          "parser.py":  { url: "./parser.py" },
-          "writer.py":  { url: "./writer.py" },
-          "mapping.py": { url: "./mapping.py" },
-          "config.py":  { url: "./config.py" },
+          "app.py":     { url: "./app.py" + v },
+          "parser.py":  { url: "./parser.py" + v },
+          "writer.py":  { url: "./writer.py" + v },
+          "mapping.py": { url: "./mapping.py" + v },
+          "config.py":  { url: "./config.py" + v },
         },
       },
       document.getElementById("root"),

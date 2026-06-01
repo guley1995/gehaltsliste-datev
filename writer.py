@@ -78,5 +78,33 @@ def baue_csv(
     return buf.getvalue(), statistik
 
 
+class EncodingError(Exception):
+    """Encoding kann ein Zeichen aus dem CSV-Text nicht darstellen."""
+
+    def __init__(self, encoding: str, problem_chars: List[str]):
+        self.encoding = encoding
+        self.problem_chars = problem_chars
+        super().__init__(
+            f"Encoding '{encoding}' kann diese Zeichen nicht darstellen: "
+            f"{', '.join(repr(c) for c in problem_chars)}. "
+            f"In der Sidebar Encoding auf 'utf-8' wechseln."
+        )
+
+
 def csv_bytes(text: str, encoding: str = "cp1252") -> bytes:
-    return text.encode(encoding, errors="replace")
+    """Encodiert die CSV strict — wirft EncodingError wenn nicht möglich.
+    Verhindert stille `?`-Ersetzungen (Datenverlust ohne Warnung)."""
+    try:
+        return text.encode(encoding, errors="strict")
+    except UnicodeEncodeError:
+        # Sammle alle Problem-Zeichen für eine klare Fehlermeldung
+        problem = sorted({ch for ch in text if not _kann_encoden(ch, encoding)})
+        raise EncodingError(encoding, problem[:10])
+
+
+def _kann_encoden(ch: str, encoding: str) -> bool:
+    try:
+        ch.encode(encoding, errors="strict")
+        return True
+    except UnicodeEncodeError:
+        return False

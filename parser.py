@@ -71,6 +71,35 @@ def _zahl(value) -> float:
         return 0.0
 
 
+def _norm_header(value) -> str:
+    """Normalisiert einen Excel-Header für tolerante Vergleichbarkeit."""
+    s = "" if value is None else str(value)
+    s = s.replace("€", "").replace(".", "").replace(",", "")
+    s = " ".join(s.split())  # Whitespace zusammenfassen
+    return s.strip().casefold()
+
+
+def _validate_headers(ws) -> List[str]:
+    """Prüft, ob in Zeile 1 die erwarteten Header an den erwarteten Spalten
+    stehen. Liefert Liste von Problem-Strings (leer = alles OK)."""
+    erwartet: Dict[str, str] = {}
+    for m in LOHNART_MAPPING:
+        erwartet[m["excel_col"]] = m["excel_header"]
+    for u in MANUELL_IN_DATEV:
+        erwartet[u["excel_col"]] = u["excel_header"]
+
+    probleme: List[str] = []
+    for col, exp in erwartet.items():
+        idx = _col_letter_to_index(col)
+        tatsaechlich = ws.cell(1, idx).value
+        if _norm_header(tatsaechlich) != _norm_header(exp):
+            probleme.append(
+                f'Spalte {col}: erwartet "{exp}", gefunden "{tatsaechlich}". '
+                f"Wenn das Schema bei diesem Mandant anders ist, mapping.py anpassen."
+            )
+    return probleme
+
+
 def parse_excel(file_bytes: bytes) -> ParseResult:
     wb = openpyxl.load_workbook(BytesIO(file_bytes), data_only=True)
 
@@ -81,6 +110,18 @@ def parse_excel(file_bytes: bytes) -> ParseResult:
         )
 
     ws = wb[UEBERSICHT_SHEET]
+
+    # Schema-Validierung: stoppt mit Fehler, wenn Header nicht passen
+    header_probleme = _validate_headers(ws)
+    if header_probleme:
+        return ParseResult(
+            mitarbeiter=[],
+            globale_warnungen=[
+                "Excel-Schema weicht von erwartetem Aufbau ab — Abbruch, um Datenverwechslung zu verhindern.",
+                *header_probleme,
+            ],
+        )
+
     name_to_tab = _baue_namen_index(wb.sheetnames)
 
     name_col_idx = _col_letter_to_index(NAME_COL)
@@ -107,10 +148,10 @@ def parse_excel(file_bytes: bytes) -> ParseResult:
         tab = name_to_tab.get(name)
         if tab:
             zeile.pers_nr = _persnr_aus_tabname(tab)
-            if not zeile.pers_nr:
-                zeile.warnungen.append(f"Kein PersNr-Suffix im Tabname '{tab}' gefunden.")
-        else:
-            zeile.warnungen.append("Kein eigenes Mitarbeiter-Sheet gefunden (Tabname fehlt).")
+        # Wenn kein Tab oder kein Suffix: pers_nr bleibt None, das wird über
+        # die UI (übersprungen_keine_persnr / Bulk-Eingabe) behandelt — kein
+        # Eintrag in ma.warnungen, weil das KEIN Datenfehler ist (z.B.
+        # Festbezugs-Nebenjobber haben kein Stunden-Tab).
 
         zeile.stundensatz = _zahl(ws.cell(r, stundensatz_col_idx).value)
 
@@ -134,6 +175,18 @@ def parse_excel(file_bytes: bytes) -> ParseResult:
                 zeile.manuell_werte[u["excel_header"]] = val
 
         zeile.soll_grundgehalt = _zahl(ws.cell(r, kontroll_col_idx).value)
+
+        # Plausibilitätscheck: Soll-Grundgehalt sollte ~ Stunden × Stundensatz sein
+        arbeitsstd = zeile.werte.get("1000", 0.0)
+        if zeile.soll_grundgehalt and zeile.stundensatz and arbeitsstd:
+            erwartet = arbeitsstd * zeile.stundensatz
+            diff = abs(zeile.soll_grundgehalt - erwartet)
+            if diff > 10.0:
+                zeile.warnungen.append(
+                    f"Plausibilität: Soll-Grundgehalt {zeile.soll_grundgehalt:.2f} € "
+                    f"weicht von (Stunden {arbeitsstd:.2f} × Satz {zeile.stundensatz:.2f} = "
+                    f"{erwartet:.2f} €) um {diff:.2f} € ab. Bitte Excel prüfen."
+                )
 
         mitarbeiter.append(zeile)
 
