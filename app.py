@@ -359,6 +359,27 @@ if not uploads:
 INTEGER_PERSNR_RE = re.compile(r"^\d+$")
 
 
+def _fuzzy_match_mandant(extracted: str, mandanten_dict: dict):
+    """Findet einen passenden Mandanten-Key basierend auf dem aus der
+    Excel extrahierten Kurzform-Namen (z.B. 'Wittys' → 'Wittys Shuttleservice GmbH').
+    Reihenfolge: exact > case-insensitive > startswith > contains."""
+    if not extracted or not mandanten_dict:
+        return None
+    el = extracted.lower().strip()
+    if extracted in mandanten_dict:
+        return extracted
+    for key in mandanten_dict:
+        if key.lower() == el:
+            return key
+    for key in mandanten_dict:
+        if key.lower().startswith(el):
+            return key
+    for key in mandanten_dict:
+        if el in key.lower():
+            return key
+    return None
+
+
 def _persnr_ist_integer(pn: str) -> bool:
     return bool(INTEGER_PERSNR_RE.match((pn or "").strip()))
 
@@ -385,7 +406,11 @@ generierte = []
 for idx, f in enumerate(uploads):
     parse = parse_excel(f.read())
     jm = monat_jahr_aus_dateiname(f.name) or (2026, 3)
-    firma_default = firma_aus_dateiname(f.name)
+    firma_extracted = firma_aus_dateiname(f.name)
+    # Fuzzy-Match: wenn 'Wittys' aus Excel-Name zu 'Wittys Shuttleservice GmbH'
+    # im Mandanten-Dict passt, nimm den vollen DATEV-Namen
+    matched = _fuzzy_match_mandant(firma_extracted, st.session_state["all_mandanten"])
+    firma_default = matched or firma_extracted
 
     st.divider()
     st.subheader(f"📄 {f.name}")

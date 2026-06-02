@@ -3,6 +3,8 @@
 *.xls
 *.xlsm
 *.csv
+*.json
+mandanten_*.json
 
 # Bilder/Screenshots vom Kunden
 *.HEIC
