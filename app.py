@@ -1,4 +1,16 @@
-"""Gehaltsliste → DATEV CSV. text_input pro Mitarbeiter (data_editor hängt in stlite)."""
+"""
+Gehaltsliste → DATEV Lohn und Gehalt (Monatserfassung) CSV.
+
+Workflow:
+1. Excel hochladen → Parser extrahiert pro Mitarbeiter die Monatswerte.
+2. UI: Beraternr, Mandantennr und PersNr pro Mitarbeiter eintragen
+   (oder per JSON-Mapping importieren — persistiert im Browser-LocalStorage).
+3. Download als 9-Spalten-CSV mit Header-Zeile (BeraterNr;MandNr;MM/JJJJ).
+4. In DATEV: Erfassen → Bewegungsdaten → Importieren → Tab Monatserfassung.
+
+Streamlit-Eigenheit: st.data_editor hängt in stlite/Pyodide, daher Layout
+mit st.text_input pro Mitarbeiter.
+"""
 import hashlib
 import io
 import json
@@ -49,15 +61,9 @@ if PASSWORT_AKTIV and not st.session_state.get("auth_ok"):
 LOCAL_STORAGE_KEY = "gehaltsliste_datev_mappings_v1"
 
 
-def _ls_bridge():
-    """JS-Schnipsel, der LocalStorage-Mappings liest und an Streamlit zurückgibt
-    sowie aktuelle Mappings nach LocalStorage schreibt. Geht in einem
-    hidden iframe-Component, daher per JS->Parent-PostMessage."""
-    pass  # placeholder — gleich konkret
-
-
 def _ls_persist(data: dict) -> None:
-    """Schreibt Mappings in LocalStorage via JS-Snippet (best effort)."""
+    """Schreibt Mappings in LocalStorage des Browsers via JS-Snippet (best effort).
+    Wirft keine Exception wenn LocalStorage nicht verfügbar."""
     import streamlit.components.v1 as components
 
     payload = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
@@ -69,27 +75,6 @@ def _ls_persist(data: dict) -> None:
                 "{LOCAL_STORAGE_KEY}",
                 {json.dumps(payload)}
             );
-        }} catch (e) {{}}
-        </script>
-        """,
-        height=0,
-    )
-
-
-def _ls_load_into_session():
-    """Beim ersten Seitenaufruf: lädt LocalStorage-Mappings in die Session.
-    Setzt session_state['all_mappings_loaded']=True nach Versuch."""
-    import streamlit.components.v1 as components
-
-    components.html(
-        f"""
-        <script>
-        try {{
-            const raw = window.parent.localStorage.getItem("{LOCAL_STORAGE_KEY}");
-            if (raw) {{
-                const ev = new CustomEvent("gehaltsliste-ls-loaded", {{ detail: raw }});
-                window.parent.document.dispatchEvent(ev);
-            }}
         }} catch (e) {{}}
         </script>
         """,
@@ -221,128 +206,88 @@ with st.sidebar:
     with st.expander("📖 DATEV-Profil einrichten (einmalig pro Mandant)"):
         st.markdown(
             """
-**Bevor der erste Import funktioniert**, musst du in DATEV Lohn und Gehalt
-**einmal pro Mandant** ein ASCII-Importprofil anlegen.
-Dauer: ca. 20 Min. Danach läuft jeder Monatslauf automatisch.
+**Einmalig pro Mandant** in DATEV ein ASCII-Importprofil für
+Monatserfassung anlegen — ca. 10 Min. Danach läuft jeder Monatslauf
+in unter einer Minute.
 
 ---
 
-### Schritt 1: Assistent öffnen
+### Schritt 1: Wizard öffnen
 
 ```
-DATEV Lohn und Gehalt öffnen
-  → Mandant öffnen (z.B. Wittys)
-  → Menüleiste oben:  Extras
-                        └→ ASCII-Import Assistent
+DATEV Lohn und Gehalt
+  → Mandant öffnen
+  → Extras → ASCII-Import Assistent
+  → "Neu"
 ```
 
-Beim ersten Aufruf: Profil-Übersicht ist leer. Klick **„Neu"** /
-**„Hinzufügen"**.
-
-### Schritt 2: Profil-Grunddaten
-
-| Was DATEV fragt | Was du einträgst |
-|---|---|
-| Profilname | `Mietwagen Monatswerte` (oder ähnlich) |
-| Was wird importiert? | **Bewegungsdaten** |
-| Importart | **ASCII / Trennzeichen-getrennt** |
-
-### Schritt 3: Datei-Format
+### Schritt 2: Format-Einstellungen
 
 | Feld | Wert |
 |---|---|
-| Feldtrennzeichen | **Semikolon** `;` |
-| Stringbegrenzer | (keiner / leer) |
+| Profilname | z.B. `Huen Monat` |
+| Feldtrennzeichen | **Strichpunkt** `;` |
 | Datensatztrennzeichen | **Enter/Return** |
-| Zeichensatz | **ANSI / Windows-1252 / CP1252** |
-| Datumsformat | **TT.MM.JJJJ** |
-| Dezimaltrennzeichen | **Komma** |
+| Kommazeichen bei Zahlen | **`,`** |
+| Trennz. Zeitangaben Echtminuten | **`:`** |
 
-> **Wichtig:** Die CSV beginnt mit einer **Header-Zeile**
-> `Beraternr;Mandantennr;MM/JJJJ` (z.B. `1479590;10010;05/2026`),
-> danach kommen die Datenzeilen. Das macht diese App automatisch,
-> wenn du oben Berater-Nr und Mandanten-Nr einträgst.
+### Schritt 3: „Aufbau des Datensatzes" — die 9 Spalten
 
-### Schritt 4: Feldzuordnung (das Wichtigste)
-
-Hier sagst du DATEV, welche Spalte unserer CSV welches DATEV-Feld ist.
-
-**Variante A — Monatserfassung (Recommended, 9 Spalten):**
-Lohnart-Summen für den ganzen Monat, ohne Tageslimit.
-
-| CSV-Spalte | DATEV-Feld |
+| Spaltennr | Feldinhalt |
 |:---:|---|
 | 1 | **Personalnummer** |
 | 2 | **Lohnartennummer** |
 | 3 | **Stundenanzahl** |
 | 4 | **Tagesanzahl** |
-| 5 | **Wert / Betrag** |
+| 5 | **Wert** |
 | 6 | **Abweichender Faktor** |
 | 7 | **Abweichende Lohnveränderung** |
 | 8 | **Kostenstellennummer** |
 | 9 | **Kostenträger** |
 
-Wichtig: **KEIN Kalendertag, KEIN Ausfallschlüssel.**
+**Wichtig:** KEIN Kalendertag, KEIN Ausfallschlüssel. → Profil speichern.
 
-**Variante B — Kalendererfassung (11 Spalten):**
-Tagesbezogene Buchung mit max. 24 h pro Stundenfeld.
+### Wichtige Eigenheit des CSV-Formats
 
-| CSV-Spalte | DATEV-Feld |
-|:---:|---|
-| 1 | Personalnummer |
-| 2 | **Kalendertag** |
-| 3 | **Ausfallschlüssel** |
-| 4 | Lohnartennummer |
-| 5 | Stundenanzahl (Tagesstunden, max. 24) |
-| 6–11 | Tage, Wert, Faktor, LohnVer, KostST, KostTr |
+Die App schreibt **alle Werte (Stunden UND EUR) in Spalte 5 (Wert)** —
+Spalte 3 (Stundenanzahl) bleibt leer. Das DATEV-Feld „Stundenanzahl"
+hat ein hartes 24h-Limit (auch wenn der Name irreführend ist).
+Stunden über 24h wären sonst abgewiesen. DATEV erkennt anhand der
+Lohnart, ob ein Wert Std oder EUR ist (zeigt in der Maske die richtige
+Einheit).
 
-In der Sidebar oben kannst du zwischen beiden Modi wechseln — der CSV-Output passt sich an.
+### Schritt 4: Monatlicher Import
 
-→ **Profil speichern.** Fertig.
+```
+Erfassen → Bewegungsdaten → Importieren
+  → Hersteller: das angelegte Profil (z.B. „Huen Monat")
+  → Tab "Monatserfassung" (nicht Kalendererfassung!)
+  → Datei: die hier heruntergeladene CSV
+  → Übernehmen
+```
 
 ---
 
-### Schritt 5: Monatlicher Import
+### Häufige Fehler
 
-```
-DATEV Lohn und Gehalt
-  → Mandant öffnen
-  → Erfassen → Bewegungsdaten → Importieren
-  → Profil auswählen: „Mietwagen Monatswerte"
-  → Datei auswählen: die hier heruntergeladene .csv
-  → Importieren
-```
+| Code | Bedeutung | Lösung |
+|---|---|---|
+| LN01465 | Beraternummer ungültig | Header-Zeile fehlt — Beraternr in der App eintragen |
+| LN00252 | Wert nicht numerisch | Spalten verschoben, meist Folge von fehlendem Header |
+| LN07951 | Ungültiges Abrechnungsdatum | DATEV-Mandant auf den Excel-Monat zurückstellen |
+| LN01473 | Tagesstunden 0–24 | Profil falsch angelegt: Spalte 3 darf nicht „Tagesstunden" sein |
+| LN07945 | Format passt nicht | Anzahl Spalten im Profil stimmt nicht (9 erwartet) |
 
-DATEV zeigt „X Sätze erfolgreich importiert" — Monatserfassung ist
-befüllt.
+### Tutorials mit Screenshots
 
----
+- [PlanD-Anleitung](https://help.pland.app/de/articles/146082-zeiterfassung-in-datev-lohn-und-gehalt-importieren)
+- [SaaS DATEV-Import](https://hilfe.saas.de/hilfesaas_v2/urlaubsverwaltung/datev-ascii-import)
+- [DATEV-Community Thread 77249](https://www.datev-community.de/t5/Personalwirtschaft/Lohn-Gehalt-Stundendaten-ASCII-Import/td-p/77249)
 
-### Tutorials mit Screenshots (externe Quellen)
+### Wer hilft
 
-- **[PlanD-Anleitung mit Screenshots](https://help.pland.app/de/articles/146082-zeiterfassung-in-datev-lohn-und-gehalt-importieren)** — sehr ausführlich, identisches Konzept
-- **[SaaS DATEV-Import](https://hilfe.saas.de/hilfesaas_v2/urlaubsverwaltung/datev-ascii-import)** — 6-Schritt-Anleitung
-- **[DATEV-Community Thread 77249](https://www.datev-community.de/t5/Personalwirtschaft/Lohn-Gehalt-Stundendaten-ASCII-Import/td-p/77249)** — andere Lohnbüros mit gleicher Frage
-- **[Offizielle DATEV-Hilfecenter Doknr. 9219371](https://apps.datev.de/help-center/documents/9219371)** — Original-Doku (Login nötig)
-
-### Troubleshooting
-
-- **„LN01143" Fehlermeldung** beim Import → Personalnummer in der CSV ist
-  in DATEV nicht angelegt. Mitarbeiter-Stamm prüfen.
-- **„Lohnart nicht im Lohnartenstamm"** → die LA-Nummer (z.B. 9651) ist
-  bei diesem Mandanten nicht angelegt. Stamm: `Stammdaten → Abrechnung
-  → Lohnarten` und LA anlegen.
-- **Umlaute zerschossen** (`?` statt `ü`) → Encoding stimmt nicht.
-  In der Sidebar oben Encoding auf `utf-8` umstellen ODER im DATEV-Profil
-  auf ANSI bleiben und unsere CSV als CP1252 (Default) lassen.
-- **Datum-Fehler** → DATEV-Profil-Datumsformat muss `TT.MM.JJJJ` sein.
-
-### Wer kann helfen?
-
-- **DATEV-Hotline:** `0911/319-0` → Personalwirtschaft → Lohn und Gehalt.
-  Die richten dir das Profil per Bildschirmübertragung in ~15 Min ein.
-- **Bei mir** (Hue.IT): Screenshot/Beschreibung der Fehlermeldung
-  schicken, dann passen wir das CSV-Format oder das Profil an.
+- **DATEV-Hotline:** 0911/319-0 → Personalwirtschaft
+- **Hue.IT:** Screenshot der Fehlermeldung + Beschreibung → wir passen Profil oder CSV an
 """
         )
 
