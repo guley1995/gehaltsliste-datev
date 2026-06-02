@@ -80,13 +80,19 @@ def baue_csv(
             stunden = _komma(betrag) if feld == "stunden" else ""
             wert = _komma(betrag) if feld == "wert" else ""
             if modus == MODUS_MONAT:
-                # 9 Spalten — ohne Kalendertag, ohne Ausfallschlüssel
+                # 9 Spalten — ohne Kalendertag, ohne Ausfallschlüssel.
+                # WICHTIG: bei Monatserfassung packen wir Stunden UND EUR in
+                # Spalte 5 (Wert). Das DATEV-Feld "Stundenanzahl" hat ein
+                # festes 24h-Limit (auch wenn der Name irreführend ist), daher
+                # bleibt Spalte 3 leer. DATEV erkennt anhand der Lohnart, ob
+                # der Wert in Std oder EUR ist.
+                der_wert = stunden if feld == "stunden" else wert
                 zeile = ";".join([
                     ma.pers_nr,   # 1 PersNr
                     lohnart,      # 2 Lohnart
-                    stunden,      # 3 Stunden
+                    "",           # 3 Stundenanzahl (LEER — hat 24h-Limit)
                     "",           # 4 Tage
-                    wert,         # 5 Wert
+                    der_wert,     # 5 Wert (Std oder EUR)
                     "",           # 6 Faktor
                     "",           # 7 LohnVer
                     "",           # 8 KostST
