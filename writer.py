@@ -27,12 +27,17 @@ def _kalendertag(jahr: int, monat: int) -> str:
     return f"{letzter:02d}.{monat:02d}.{jahr:04d}"
 
 
+MODUS_MONAT = "monat"  # 9 Spalten, ohne Kalendertag/Ausfallschlüssel
+MODUS_KALENDER = "kalender"  # 11 Spalten, mit Kalendertag/Ausfallschlüssel
+
+
 def baue_csv(
     mitarbeiter: List[MitarbeiterZeile],
     jahr: int,
     monat: int,
     beraternr: str = "",
     mandantennr: str = "",
+    modus: str = MODUS_MONAT,
 ) -> Tuple[str, dict]:
     """Liefert (csv_text, statistik).
 
@@ -40,7 +45,13 @@ def baue_csv(
         Beraternummer;Mandantennummer;MM/JJJJ
         z.B. 1479590;10010;05/2026
 
-    Danach folgen die Bewegungsdaten-Zeilen (11 Spalten).
+    Danach folgen die Bewegungsdaten-Zeilen. Format hängt vom Modus ab:
+
+    - MODUS_MONAT (9 Spalten, Standard für Monatserfassung):
+        PersNr;Lohnart;Std;Tage;Wert;Faktor;LohnVer;KostST;KostTr
+
+    - MODUS_KALENDER (11 Spalten, für Kalendererfassung):
+        PersNr;Kalendertag;Ausfallschl;Lohnart;Std;Tage;Wert;Faktor;LohnVer;KostST;KostTr
 
     Mitarbeiter ohne PersNr oder ohne Werte werden übersprungen und in
     der Statistik gemeldet."""
@@ -68,19 +79,34 @@ def baue_csv(
             feld = LOHNART_FELD.get(lohnart, "wert")
             stunden = _komma(betrag) if feld == "stunden" else ""
             wert = _komma(betrag) if feld == "wert" else ""
-            zeile = ";".join([
-                ma.pers_nr,
-                tag,
-                "",
-                lohnart,
-                stunden,
-                "",
-                wert,
-                "",
-                "",
-                "",
-                "",
-            ])
+            if modus == MODUS_MONAT:
+                # 9 Spalten — ohne Kalendertag, ohne Ausfallschlüssel
+                zeile = ";".join([
+                    ma.pers_nr,   # 1 PersNr
+                    lohnart,      # 2 Lohnart
+                    stunden,      # 3 Stunden
+                    "",           # 4 Tage
+                    wert,         # 5 Wert
+                    "",           # 6 Faktor
+                    "",           # 7 LohnVer
+                    "",           # 8 KostST
+                    "",           # 9 KostTr
+                ])
+            else:
+                # 11 Spalten — Kalendererfassung
+                zeile = ";".join([
+                    ma.pers_nr,   # 1
+                    tag,          # 2 Kalendertag
+                    "",           # 3 Ausfallschl
+                    lohnart,      # 4
+                    stunden,      # 5
+                    "",           # 6 Tage
+                    wert,         # 7
+                    "",           # 8 Faktor
+                    "",           # 9 LohnVer
+                    "",           # 10 KostST
+                    "",           # 11 KostTr
+                ])
             buf.write(zeile + "\r\n")
             geschrieben += 1
 
@@ -91,6 +117,7 @@ def baue_csv(
         "kalendertag": tag,
         "abrechnungsmonat": abr_monat,
         "header_vorhanden": bool(beraternr or mandantennr),
+        "modus": modus,
     }
     return buf.getvalue(), statistik
 

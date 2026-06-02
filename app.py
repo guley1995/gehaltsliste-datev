@@ -10,7 +10,7 @@ import streamlit as st
 from config import LOGO_TAGLINE, LOGO_TEXT, LOGO_URL, PASSWORT_AKTIV, PASSWORT_HASH
 from mapping import LOHNART_MAPPING, MANUELL_IN_DATEV
 from parser import firma_aus_dateiname, monat_jahr_aus_dateiname, parse_excel
-from writer import EncodingError, baue_csv, csv_bytes
+from writer import MODUS_KALENDER, MODUS_MONAT, EncodingError, baue_csv, csv_bytes
 
 st.set_page_config(page_title="Gehaltsliste → DATEV", layout="wide")
 
@@ -121,6 +121,21 @@ st.caption("Excel hochladen → CSV erzeugen. Daten bleiben im Browser.")
 # ─── Sidebar ──────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("Einstellungen")
+
+    modus_label = st.radio(
+        "DATEV-Profil-Typ",
+        options=["Monatserfassung (9 Spalten)", "Kalendererfassung (11 Spalten)"],
+        index=0,
+        help=(
+            "**Monatserfassung** = monatliche Lohnart-Summen, ohne "
+            "Tageslimit. Profil im DATEV ohne Kalendertag/Ausfallschlüssel "
+            "konfiguriert.\n\n"
+            "**Kalendererfassung** = tagesbezogene Buchungen, max. 24 h "
+            "pro Stunden-Feld. Profil im DATEV mit Kalendertag-Spalte."
+        ),
+    )
+    modus = MODUS_MONAT if modus_label.startswith("Monat") else MODUS_KALENDER
+
     encoding = st.selectbox(
         "Encoding",
         ["cp1252", "utf-8"],
@@ -251,21 +266,37 @@ Beim ersten Aufruf: Profil-Übersicht ist leer. Klick **„Neu"** /
 ### Schritt 4: Feldzuordnung (das Wichtigste)
 
 Hier sagst du DATEV, welche Spalte unserer CSV welches DATEV-Feld ist.
-**Reihenfolge exakt so:**
+
+**Variante A — Monatserfassung (Recommended, 9 Spalten):**
+Lohnart-Summen für den ganzen Monat, ohne Tageslimit.
 
 | CSV-Spalte | DATEV-Feld |
 |:---:|---|
 | 1 | **Personalnummer** |
+| 2 | **Lohnartennummer** |
+| 3 | **Stundenanzahl** |
+| 4 | **Tagesanzahl** |
+| 5 | **Wert / Betrag** |
+| 6 | **Abweichender Faktor** |
+| 7 | **Abweichende Lohnveränderung** |
+| 8 | **Kostenstellennummer** |
+| 9 | **Kostenträger** |
+
+Wichtig: **KEIN Kalendertag, KEIN Ausfallschlüssel.**
+
+**Variante B — Kalendererfassung (11 Spalten):**
+Tagesbezogene Buchung mit max. 24 h pro Stundenfeld.
+
+| CSV-Spalte | DATEV-Feld |
+|:---:|---|
+| 1 | Personalnummer |
 | 2 | **Kalendertag** |
 | 3 | **Ausfallschlüssel** |
-| 4 | **Lohnartennummer** |
-| 5 | **Stundenanzahl** |
-| 6 | **Tagesanzahl** |
-| 7 | **Wert / Betrag** |
-| 8 | **Abweichender Faktor** |
-| 9 | **Abweichende Lohnveränderung** |
-| 10 | **Kostenstellennummer** |
-| 11 | **Kostenträger** |
+| 4 | Lohnartennummer |
+| 5 | Stundenanzahl (Tagesstunden, max. 24) |
+| 6–11 | Tage, Wert, Faktor, LohnVer, KostST, KostTr |
+
+In der Sidebar oben kannst du zwischen beiden Modi wechseln — der CSV-Output passt sich an.
 
 → **Profil speichern.** Fertig.
 
@@ -521,6 +552,7 @@ for idx, f in enumerate(uploads):
         parse.mitarbeiter, int(jahr), int(monat),
         beraternr=beraternr_input.strip(),
         mandantennr=mandantennr_input.strip(),
+        modus=modus,
     )
     try:
         data = csv_bytes(csv_text, encoding=encoding)
