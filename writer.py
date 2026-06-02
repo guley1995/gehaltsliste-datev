@@ -31,12 +31,27 @@ def baue_csv(
     mitarbeiter: List[MitarbeiterZeile],
     jahr: int,
     monat: int,
+    beraternr: str = "",
+    mandantennr: str = "",
 ) -> Tuple[str, dict]:
-    """Liefert (csv_text, statistik). Mitarbeiter ohne PersNr oder ohne
-    Werte werden übersprungen und in der Statistik gemeldet."""
+    """Liefert (csv_text, statistik).
+
+    DATEV Lohn und Gehalt erwartet als ERSTE Zeile einen Header:
+        Beraternummer;Mandantennummer;MM/JJJJ
+        z.B. 1479590;10010;05/2026
+
+    Danach folgen die Bewegungsdaten-Zeilen (11 Spalten).
+
+    Mitarbeiter ohne PersNr oder ohne Werte werden übersprungen und in
+    der Statistik gemeldet."""
 
     tag = _kalendertag(jahr, monat)
+    abr_monat = f"{monat:02d}/{jahr:04d}"
     buf = StringIO()
+
+    # Header-Zeile (Pflicht laut DATEV ASCII-Import Assistent)
+    if beraternr or mandantennr:
+        buf.write(f"{beraternr};{mandantennr};{abr_monat}\r\n")
 
     geschrieben = 0
     uebersprungen_keine_persnr = []
@@ -74,6 +89,8 @@ def baue_csv(
         "uebersprungen_keine_persnr": uebersprungen_keine_persnr,
         "uebersprungen_keine_werte": uebersprungen_keine_werte,
         "kalendertag": tag,
+        "abrechnungsmonat": abr_monat,
+        "header_vorhanden": bool(beraternr or mandantennr),
     }
     return buf.getvalue(), statistik
 

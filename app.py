@@ -100,6 +100,18 @@ def _ls_load_into_session():
 # ─── Session State Init ───────────────────────────────────────────────
 if "all_mappings" not in st.session_state:
     st.session_state["all_mappings"] = {}
+if "all_mandanten" not in st.session_state:
+    # { firma: {"beraternr": "1479590", "mandantennr": "10010"} }
+    st.session_state["all_mandanten"] = {}
+
+
+def _alles_persistieren():
+    """LocalStorage-Update: speichert all_mappings + all_mandanten zusammen."""
+    payload = {
+        "mappings": st.session_state["all_mappings"],
+        "mandanten": st.session_state["all_mandanten"],
+    }
+    _ls_persist(payload)
 
 
 st.title("Gehaltsliste → DATEV Lohn und Gehalt")
@@ -126,25 +138,36 @@ with st.sidebar:
         "Sicherung mit Export/Import (JSON) — z.B. in iCloud/Drive ablegen."
     )
 
-    if st.session_state["all_mappings"]:
+    if st.session_state["all_mappings"] or st.session_state["all_mandanten"]:
+        export_data = {
+            "mappings": st.session_state["all_mappings"],
+            "mandanten": st.session_state["all_mandanten"],
+        }
         st.download_button(
-            "⬇️ Mappings exportieren",
-            data=json.dumps(st.session_state["all_mappings"], indent=2, ensure_ascii=False),
+            "⬇️ Mappings + Mandanten exportieren",
+            data=json.dumps(export_data, indent=2, ensure_ascii=False),
             file_name="datev_persnr_mappings.json",
             mime="application/json",
             use_container_width=True,
         )
 
-    imp = st.file_uploader("⬆️ Mappings importieren", type=["json"], key="mapimp")
+    imp = st.file_uploader("⬆️ Importieren", type=["json"], key="mapimp")
     if imp is not None:
         try:
             data = json.loads(imp.read().decode("utf-8"))
-            if isinstance(data, dict):
+            # Neues Format: {"mappings": {...}, "mandanten": {...}}
+            if isinstance(data, dict) and "mappings" in data:
+                st.session_state["all_mappings"].update(data.get("mappings") or {})
+                st.session_state["all_mandanten"].update(data.get("mandanten") or {})
+                _alles_persistieren()
+                st.success(f"{len(data.get('mappings') or {})} Firma(en) importiert.")
+            # Altes Format: {Firma: {Name: PersNr}}
+            elif isinstance(data, dict):
                 st.session_state["all_mappings"].update(data)
-                _ls_persist(st.session_state["all_mappings"])
-                st.success(f"{len(data)} Firma(en) importiert.")
+                _alles_persistieren()
+                st.success(f"{len(data)} Firma(en) importiert (Mandanten-Meta fehlt — bitte ergänzen).")
             else:
-                st.error("Erwartet: {Firma: {Name: PersNr}}")
+                st.error("Erwartet: {mappings: ..., mandanten: ...}")
         except Exception as e:
             st.error(f"Import: {e}")
 
@@ -152,10 +175,15 @@ with st.sidebar:
         with st.expander("Mappings ansehen / löschen"):
             for fname_ in list(st.session_state["all_mappings"].keys()):
                 cols = st.columns([3, 1])
-                cols[0].write(f"**{fname_}** — {len(st.session_state['all_mappings'][fname_])} Einträge")
+                meta = st.session_state["all_mandanten"].get(fname_, {})
+                meta_str = f" — Berater {meta.get('beraternr','?')}/Mandant {meta.get('mandantennr','?')}" if meta else ""
+                cols[0].write(
+                    f"**{fname_}** — {len(st.session_state['all_mappings'][fname_])} Einträge{meta_str}"
+                )
                 if cols[1].button("🗑", key=f"del_{fname_}"):
                     del st.session_state["all_mappings"][fname_]
-                    _ls_persist(st.session_state["all_mappings"])
+                    st.session_state["all_mandanten"].pop(fname_, None)
+                    _alles_persistieren()
                     st.rerun()
 
     st.divider()
@@ -210,10 +238,15 @@ Beim ersten Aufruf: Profil-Übersicht ist leer. Klick **„Neu"** /
 |---|---|
 | Feldtrennzeichen | **Semikolon** `;` |
 | Stringbegrenzer | (keiner / leer) |
-| Kopfzeile vorhanden? | **Nein** — unsere CSV hat keinen Header |
+| Datensatztrennzeichen | **Enter/Return** |
 | Zeichensatz | **ANSI / Windows-1252 / CP1252** |
 | Datumsformat | **TT.MM.JJJJ** |
 | Dezimaltrennzeichen | **Komma** |
+
+> **Wichtig:** Die CSV beginnt mit einer **Header-Zeile**
+> `Beraternr;Mandantennr;MM/JJJJ` (z.B. `1479590;10010;05/2026`),
+> danach kommen die Datenzeilen. Das macht diese App automatisch,
+> wenn du oben Berater-Nr und Mandanten-Nr einträgst.
 
 ### Schritt 4: Feldzuordnung (das Wichtigste)
 
@@ -340,6 +373,45 @@ for idx, f in enumerate(uploads):
                                step=1, key=f"m_{idx}_{f.name}")
 
     firma_map = st.session_state["all_mappings"].setdefault(firma, {})
+    mandant_meta = st.session_state["all_mandanten"].setdefault(firma, {})
+
+    # ── Berater-Nr & Mandanten-Nr (Pflicht für DATEV-Header) ──────────
+    col_b, col_mn = st.columns([1, 1])
+    beraternr_default = mandant_meta.get("beraternr", "")
+    mandantennr_default = mandant_meta.get("mandantennr", "")
+    beraternr_input = col_b.text_input(
+        "Beraternummer (für CSV-Header)",
+        value=beraternr_default,
+        key=f"ber_{idx}_{f.name}",
+        placeholder="z.B. 1479590",
+        help="DATEV erwartet die Beraternummer in der 1. CSV-Zeile. "
+             "Steht oben in DATEV LuG in der Titelleiste (vor dem Schrägstrich).",
+    )
+    mandantennr_input = col_mn.text_input(
+        "Mandantennummer (für CSV-Header)",
+        value=mandantennr_default,
+        key=f"mdt_{idx}_{f.name}",
+        placeholder="z.B. 10010",
+        help="DATEV erwartet die Mandantennummer in der 1. CSV-Zeile. "
+             "Steht in der Titelleiste hinter dem Schrägstrich.",
+    )
+    # Persistieren bei Änderung
+    if (beraternr_input.strip() != beraternr_default or
+            mandantennr_input.strip() != mandantennr_default):
+        if beraternr_input.strip() or mandantennr_input.strip():
+            mandant_meta["beraternr"] = beraternr_input.strip()
+            mandant_meta["mandantennr"] = mandantennr_input.strip()
+        else:
+            st.session_state["all_mandanten"].pop(firma, None)
+        _alles_persistieren()
+
+    if not beraternr_input.strip() or not mandantennr_input.strip():
+        st.warning(
+            "⚠️ Ohne Berater- und Mandantennummer in der CSV-Header-Zeile "
+            "lehnt DATEV den Import mit Fehler **LN01465** ab. Bitte oben "
+            "ausfüllen (Werte stehen in DATEV LuG in der Titelleiste, z.B. "
+            "`1479590 / 10010 FahrFlex GmbH`)."
+        )
 
     # ── Übersprungene Mitarbeiter PROMINENT oben anzeigen (#3) ────────
     keine_persnr = [ma for ma in parse.mitarbeiter if not firma_map.get(ma.name) and not ma.pers_nr]
@@ -445,7 +517,11 @@ for idx, f in enumerate(uploads):
         _ls_persist(st.session_state["all_mappings"])
 
     # ── CSV bauen ─────────────────────────────────────────────────────
-    csv_text, stat = baue_csv(parse.mitarbeiter, int(jahr), int(monat))
+    csv_text, stat = baue_csv(
+        parse.mitarbeiter, int(jahr), int(monat),
+        beraternr=beraternr_input.strip(),
+        mandantennr=mandantennr_input.strip(),
+    )
     try:
         data = csv_bytes(csv_text, encoding=encoding)
         encoding_err = None
