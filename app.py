@@ -105,37 +105,13 @@ st.caption("Excel hochladen → CSV erzeugen. Daten bleiben im Browser.")
 
 # ─── Sidebar ──────────────────────────────────────────────────────────
 with st.sidebar:
-    st.header("Einstellungen")
-
-    modus_label = st.radio(
-        "DATEV-Profil-Typ",
-        options=["Monatserfassung (9 Spalten)", "Kalendererfassung (11 Spalten)"],
-        index=0,
-        help=(
-            "**Monatserfassung** = monatliche Lohnart-Summen, ohne "
-            "Tageslimit. Profil im DATEV ohne Kalendertag/Ausfallschlüssel "
-            "konfiguriert.\n\n"
-            "**Kalendererfassung** = tagesbezogene Buchungen, max. 24 h "
-            "pro Stunden-Feld. Profil im DATEV mit Kalendertag-Spalte."
-        ),
-    )
-    modus = MODUS_MONAT if modus_label.startswith("Monat") else MODUS_KALENDER
-
-    encoding = st.selectbox(
-        "Encoding",
-        ["cp1252", "utf-8"],
-        index=0,
-        help="DATEV erwartet meist ANSI/CP1252. Wenn die App bei Sonderzeichen "
-             "(z.B. Šarić) einen Encoding-Fehler meldet, hier auf utf-8 wechseln.",
-    )
-
-    st.divider()
-    st.subheader("PersNr-Mappings")
-    n_firmen = len(st.session_state["all_mappings"])
+    # ── Status oben (kompakt) ─────────────────────────────────────────
+    n_mandanten = len(st.session_state["all_mandanten"])
+    n_mappings = len(st.session_state["all_mappings"])
     n_pers = sum(len(v) for v in st.session_state["all_mappings"].values())
-    st.caption(
-        f"Aktuell: **{n_firmen} Firma(en)**, {n_pers} Einträge.\n\n"
-        "Sicherung mit Export/Import (JSON) — z.B. in iCloud/Drive ablegen."
+    st.markdown(
+        f"📊 **{n_mandanten}** Mandanten · **{n_pers}** Personalnummern "
+        f"in {n_mappings} Firmen"
     )
 
     if st.session_state["all_mappings"] or st.session_state["all_mandanten"]:
@@ -144,65 +120,94 @@ with st.sidebar:
             "mandanten": st.session_state["all_mandanten"],
         }
         st.download_button(
-            "⬇️ Mappings + Mandanten exportieren",
+            "⬇️ Backup exportieren",
             data=json.dumps(export_data, indent=2, ensure_ascii=False),
-            file_name="datev_persnr_mappings.json",
+            file_name="datev_backup.json",
             mime="application/json",
             use_container_width=True,
         )
 
-    imp = st.file_uploader("⬆️ Importieren", type=["json"], key="mapimp")
-    if imp is not None:
-        try:
-            data = json.loads(imp.read().decode("utf-8"))
-            # Neues Format: {"mappings": {...}, "mandanten": {...}}
-            if isinstance(data, dict) and "mappings" in data:
-                st.session_state["all_mappings"].update(data.get("mappings") or {})
-                st.session_state["all_mandanten"].update(data.get("mandanten") or {})
-                _alles_persistieren()
-                st.success(f"{len(data.get('mappings') or {})} Firma(en) importiert.")
-            # Altes Format: {Firma: {Name: PersNr}}
-            elif isinstance(data, dict):
-                st.session_state["all_mappings"].update(data)
-                _alles_persistieren()
-                st.success(f"{len(data)} Firma(en) importiert (Mandanten-Meta fehlt — bitte ergänzen).")
-            else:
-                st.error("Erwartet: {mappings: ..., mandanten: ...}")
-        except Exception as e:
-            st.error(f"Import: {e}")
+    st.divider()
 
-    if st.session_state["all_mappings"]:
-        with st.expander("Mappings ansehen / löschen"):
-            for fname_ in list(st.session_state["all_mappings"].keys()):
+    # ── Setup (Import + Liste + Einstellungen) ────────────────────────
+    with st.expander("📤 Mandanten + Einstellungen", expanded=(n_mandanten == 0)):
+        st.caption(
+            "EINE JSON enthält Berater-Nr, Mandanten-Nr UND PersNr "
+            "für alle Firmen — einmal hochladen, alles ist drin."
+        )
+        imp = st.file_uploader(
+            "JSON wählen", type=["json"], key="mapimp", label_visibility="collapsed"
+        )
+        if imp is not None:
+            try:
+                data = json.loads(imp.read().decode("utf-8"))
+                if isinstance(data, dict) and "mappings" in data:
+                    new_mappings = data.get("mappings") or {}
+                    new_mandanten = data.get("mandanten") or {}
+                    st.session_state["all_mappings"].update(new_mappings)
+                    st.session_state["all_mandanten"].update(new_mandanten)
+                    _alles_persistieren()
+                    n_p = sum(len(v) for v in new_mappings.values())
+                    st.success(
+                        f"✅ **{len(new_mandanten)} Mandanten** + "
+                        f"**{n_p} Personalnummern** geladen."
+                    )
+                elif isinstance(data, dict):
+                    st.session_state["all_mappings"].update(data)
+                    _alles_persistieren()
+                    st.success(f"{len(data)} Firma(en) importiert (altes Format).")
+                else:
+                    st.error("Erwartet: {mappings: ..., mandanten: ...}")
+            except Exception as e:
+                st.error(f"Import: {e}")
+
+        if st.session_state["all_mappings"] or st.session_state["all_mandanten"]:
+            st.markdown("**Geladene Mandanten:**")
+            alle = sorted(set(st.session_state["all_mandanten"]) |
+                          set(st.session_state["all_mappings"]))
+            for fname_ in alle:
                 cols = st.columns([3, 1])
                 meta = st.session_state["all_mandanten"].get(fname_, {})
-                meta_str = f" — Berater {meta.get('beraternr','?')}/Mandant {meta.get('mandantennr','?')}" if meta else ""
-                cols[0].write(
-                    f"**{fname_}** — {len(st.session_state['all_mappings'][fname_])} Einträge{meta_str}"
+                n_p_firma = len(st.session_state["all_mappings"].get(fname_, {}))
+                meta_str = (
+                    f" — B {meta.get('beraternr','?')}/M {meta.get('mandantennr','?')}"
+                    if meta else " — (keine Nr)"
                 )
+                cols[0].caption(f"**{fname_}**{meta_str} · {n_p_firma} PersNr")
                 if cols[1].button("🗑", key=f"del_{fname_}"):
-                    del st.session_state["all_mappings"][fname_]
+                    st.session_state["all_mappings"].pop(fname_, None)
                     st.session_state["all_mandanten"].pop(fname_, None)
                     _alles_persistieren()
                     st.rerun()
 
-    st.divider()
-    st.subheader("Lohnart-Mapping")
-    st.dataframe(
-        [{"Sp": m["excel_col"], "Header": m["excel_header"], "LA": m["lohnart"]}
-         for m in LOHNART_MAPPING],
-        hide_index=True, use_container_width=True,
-    )
+        st.divider()
+        modus_label = st.radio(
+            "DATEV-Profil-Typ",
+            options=["Monatserfassung (9 Spalten)", "Kalendererfassung (11 Spalten)"],
+            index=0,
+            help="Monatserfassung = Standard.",
+        )
+        modus = MODUS_MONAT if modus_label.startswith("Monat") else MODUS_KALENDER
+        encoding = st.selectbox(
+            "Encoding",
+            ["cp1252", "utf-8"],
+            index=0,
+            help="DATEV erwartet ANSI/CP1252. Bei Umlautproblemen UTF-8.",
+        )
 
-    st.subheader("Manuell in DATEV")
-    st.caption("NICHT in CSV — über DATEV-Maske/Kalender pflegen.")
-    st.dataframe(
-        [{"Sp": u["excel_col"], "Header": u["excel_header"], "LA": u["lohnart"]}
-         for u in MANUELL_IN_DATEV],
-        hide_index=True, use_container_width=True,
-    )
+    with st.expander("📋 Lohnart-Mapping ansehen"):
+        st.dataframe(
+            [{"Sp": m["excel_col"], "Header": m["excel_header"], "LA": m["lohnart"]}
+             for m in LOHNART_MAPPING],
+            hide_index=True, use_container_width=True,
+        )
+        st.caption("Nicht in CSV (in DATEV manuell pflegen):")
+        st.dataframe(
+            [{"Sp": u["excel_col"], "Header": u["excel_header"], "LA": u["lohnart"]}
+             for u in MANUELL_IN_DATEV],
+            hide_index=True, use_container_width=True,
+        )
 
-    st.divider()
     with st.expander("📖 DATEV-Profil einrichten (einmalig pro Mandant)"):
         st.markdown(
             """
