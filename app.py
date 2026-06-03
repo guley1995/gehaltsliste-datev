@@ -99,6 +99,48 @@ def _alles_persistieren():
     _ls_persist(payload)
 
 
+def _enter_zu_naechstem_input():
+    """JS-Snippet: Enter im text_input → blur + Fokus zum nächsten text_input.
+    Fragil, weil Streamlit keine stabilen DOM-Anchors hat — wir filtern grob
+    auf inputs mit dem Attribute aria-label='PersNr'."""
+    import streamlit.components.v1 as components
+    components.html(
+        """
+        <script>
+        (function() {
+          const attach = () => {
+            const doc = window.parent.document;
+            const inputs = Array.from(doc.querySelectorAll('input[type="text"], input[type="number"]'))
+              .filter(i => (i.getAttribute('aria-label') || '').toLowerCase().includes('persnr'));
+            inputs.forEach((inp, i) => {
+              if (inp.dataset.entHandler) return;
+              inp.dataset.entHandler = '1';
+              inp.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const all = Array.from(doc.querySelectorAll('input[type="text"]'))
+                    .filter(i => (i.getAttribute('aria-label') || '').toLowerCase().includes('persnr'));
+                  const idx = all.indexOf(inp);
+                  inp.blur();
+                  setTimeout(() => {
+                    const next = all[idx + 1];
+                    if (next) next.focus();
+                  }, 120);
+                }
+              });
+            });
+          };
+          attach();
+          // Re-attach nach Streamlit-Reruns (DOM wird neu gebaut)
+          setInterval(attach, 1500);
+        })();
+        </script>
+        """,
+        height=0,
+    )
+
+
 st.title("Gehaltsliste → DATEV Lohn und Gehalt")
 st.caption("Excel hochladen → CSV erzeugen. Daten bleiben im Browser.")
 
@@ -113,18 +155,25 @@ with st.sidebar:
         f"📊 **{n_mandanten}** Mandanten · **{n_pers}** Personalnummern "
         f"in {n_mappings} Firmen"
     )
+    st.caption(
+        "Daten leben im Browser-LocalStorage. Backup (JSON) regelmäßig "
+        "in iCloud/Drive ablegen — sonst weg bei Browser-Reset."
+    )
 
     if st.session_state["all_mappings"] or st.session_state["all_mandanten"]:
         export_data = {
             "mappings": st.session_state["all_mappings"],
             "mandanten": st.session_state["all_mandanten"],
         }
+        from datetime import date
         st.download_button(
-            "⬇️ Backup exportieren",
+            "⬇️ Backup als JSON",
             data=json.dumps(export_data, indent=2, ensure_ascii=False),
-            file_name="datev_backup.json",
+            file_name=f"datev_backup_{date.today().isoformat()}.json",
             mime="application/json",
             use_container_width=True,
+            help="Empfohlen: nach jedem Monatslauf herunterladen, in "
+                 "iCloud/Drive sichern. Nächsten Monat einfach wieder hochladen.",
         )
 
     st.divider()
@@ -135,29 +184,68 @@ with st.sidebar:
             "EINE JSON enthält Berater-Nr, Mandanten-Nr UND PersNr "
             "für alle Firmen — einmal hochladen, alles ist drin."
         )
-        imp = st.file_uploader(
-            "JSON wählen", type=["json"], key="mapimp", label_visibility="collapsed"
-        )
+        col_imp, col_mode = st.columns([3, 2])
+        with col_imp:
+            imp = st.file_uploader(
+                "JSON wählen", type=["json"], key="mapimp", label_visibility="collapsed"
+            )
+        with col_mode:
+            import_mode = st.radio(
+                "Import-Modus", ["Nur Neues", "Überschreiben"],
+                index=0, key="imp_mode", label_visibility="collapsed",
+                help="**Nur Neues**: vorhandene Mandanten/PersNr werden NICHT "
+                     "geändert, nur neue kommen dazu. **Überschreiben**: alle "
+                     "Werte aus der JSON ersetzen die in der Session.",
+            )
         if imp is not None:
             try:
                 data = json.loads(imp.read().decode("utf-8"))
-                if isinstance(data, dict) and "mappings" in data:
-                    new_mappings = data.get("mappings") or {}
-                    new_mandanten = data.get("mandanten") or {}
-                    st.session_state["all_mappings"].update(new_mappings)
-                    st.session_state["all_mandanten"].update(new_mandanten)
-                    _alles_persistieren()
-                    n_p = sum(len(v) for v in new_mappings.values())
-                    st.success(
-                        f"✅ **{len(new_mandanten)} Mandanten** + "
-                        f"**{n_p} Personalnummern** geladen."
+                if not (isinstance(data, dict) and "mappings" in data):
+                    if isinstance(data, dict):
+                        data = {"mappings": data, "mandanten": {}}
+                    else:
+                        raise ValueError("Erwartet: {mappings: ..., mandanten: ...}")
+
+                new_mappings = data.get("mappings") or {}
+                new_mandanten = data.get("mandanten") or {}
+                overwrite = import_mode.startswith("Über")
+
+                stats = {"mand_neu": 0, "mand_skip": 0,
+                         "pers_neu": 0, "pers_skip": 0}
+
+                # Mandanten mergen
+                for firma, meta in new_mandanten.items():
+                    if firma in st.session_state["all_mandanten"] and not overwrite:
+                        stats["mand_skip"] += 1
+                    else:
+                        if firma not in st.session_state["all_mandanten"]:
+                            stats["mand_neu"] += 1
+                        st.session_state["all_mandanten"][firma] = meta
+
+                # PersNr-Mappings mergen (Deep-Merge auf Name-Ebene)
+                for firma, namen_dict in new_mappings.items():
+                    bestehende = st.session_state["all_mappings"].setdefault(firma, {})
+                    for name, pn in namen_dict.items():
+                        if name in bestehende and not overwrite:
+                            stats["pers_skip"] += 1
+                        else:
+                            if name not in bestehende:
+                                stats["pers_neu"] += 1
+                            bestehende[name] = pn
+
+                _alles_persistieren()
+                st.session_state["last_export_warn"] = False  # neuer Stand
+
+                msg = (
+                    f"✅ **{stats['mand_neu']} neue Mandanten** + "
+                    f"**{stats['pers_neu']} neue Personalnummern** hinzugefügt."
+                )
+                if stats["mand_skip"] or stats["pers_skip"]:
+                    msg += (
+                        f"  \n_Übersprungen (schon vorhanden): "
+                        f"{stats['mand_skip']} Mandanten, {stats['pers_skip']} PersNr._"
                     )
-                elif isinstance(data, dict):
-                    st.session_state["all_mappings"].update(data)
-                    _alles_persistieren()
-                    st.success(f"{len(data)} Firma(en) importiert (altes Format).")
-                else:
-                    st.error("Erwartet: {mappings: ..., mandanten: ...}")
+                st.success(msg)
             except Exception as e:
                 st.error(f"Import: {e}")
 
@@ -610,6 +698,9 @@ if len(generierte) > 1:
     st.download_button("⬇️ Alle CSVs als ZIP", data=zbuf.getvalue(),
                        file_name="DATEV_CSVs.zip", mime="application/zip",
                        type="primary", use_container_width=True)
+
+# ─── JS-Hook: Enter springt zum nächsten PersNr-Feld ─────────────────
+_enter_zu_naechstem_input()
 
 
 # ─── Beim ersten Aufruf: LocalStorage einmal laden ─────────────────────
