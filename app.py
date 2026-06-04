@@ -705,7 +705,7 @@ for idx, f in enumerate(uploads):
                     matched += 1
                 else:
                     unmatched.append(name)
-            _ls_persist(st.session_state["all_mappings"])
+            _alles_persistieren()
             if matched:
                 st.success(f"{matched} PersNr übernommen.")
             if unmatched:
@@ -754,7 +754,7 @@ for idx, f in enumerate(uploads):
         ma.pers_nr = firma_map.get(ma.name) or ma.pers_nr
 
     if changed_any:
-        _ls_persist(st.session_state["all_mappings"])
+        _alles_persistieren()
 
     # ── CSV bauen ─────────────────────────────────────────────────────
     csv_text, stat = baue_csv(
