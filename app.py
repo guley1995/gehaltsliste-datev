@@ -99,6 +99,149 @@ def _alles_persistieren():
     _ls_persist(payload)
 
 
+def _auto_save_widget():
+    """File System Access API Widget für Auto-Save in einen lokalen Ordner.
+    User wählt einmal einen Ordner (idealerweise iCloud/OneDrive-synced),
+    danach schreibt die App bei jeder Änderung automatisch ein JSON-Backup
+    in diesen Ordner. Browser muss File System Access unterstützen (Chrome/Edge).
+    """
+    import streamlit.components.v1 as components
+    components.html(
+        f"""
+        <style>
+          :root {{ color-scheme: dark light; }}
+          body {{ margin: 0; padding: 8px 0; font-family: -apple-system, system-ui, sans-serif; }}
+          .row {{ display: flex; align-items: center; gap: 8px; font-size: 13px; }}
+          button.cn {{ padding: 4px 10px; border-radius: 6px; border: 1px solid #888; background: #0f62fe; color: white; cursor: pointer; font-size: 12px; }}
+          button.cn:hover {{ filter: brightness(1.1); }}
+          .status {{ color: #888; font-size: 12px; margin-top: 4px; }}
+          .ok {{ color: #00a651; }}
+          .err {{ color: #d32f2f; }}
+        </style>
+        <div>
+          <div class="row">
+            <button class="cn" id="connect">📁 Mit Ordner verbinden</button>
+            <span id="state">…</span>
+          </div>
+          <div class="status" id="info">Auto-Save schreibt bei jeder Änderung ein <code>datev_backup.json</code> in den gewählten Ordner.</div>
+        </div>
+        <script>
+        (function() {{
+          const LS_KEY = "{LOCAL_STORAGE_KEY}";
+          const IDB_NAME = "gehaltsliste_autosave";
+          const IDB_STORE = "handles";
+          const HANDLE_KEY = "dirHandle";
+          const FILE_NAME = "datev_backup.json";
+          const POLL_MS = 1500;
+
+          const supported = !!(window.showDirectoryPicker);
+          const $state = document.getElementById('state');
+          const $info = document.getElementById('info');
+          const $btn = document.getElementById('connect');
+
+          if (!supported) {{
+            $btn.disabled = true;
+            $state.innerHTML = '<span class="err">Browser ohne File System Access API — nutze Chrome/Edge.</span>';
+            return;
+          }}
+
+          // IndexedDB-Helpers
+          function idb(mode) {{
+            return new Promise((res, rej) => {{
+              const req = indexedDB.open(IDB_NAME, 1);
+              req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+              req.onsuccess = () => {{
+                const tx = req.result.transaction(IDB_STORE, mode);
+                res(tx.objectStore(IDB_STORE));
+              }};
+              req.onerror = () => rej(req.error);
+            }});
+          }}
+          async function saveHandle(h) {{ const s = await idb('readwrite'); s.put(h, HANDLE_KEY); }}
+          async function loadHandle() {{
+            const s = await idb('readonly');
+            return new Promise((res, rej) => {{
+              const r = s.get(HANDLE_KEY); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+            }});
+          }}
+          async function clearHandle() {{ const s = await idb('readwrite'); s.delete(HANDLE_KEY); }}
+
+          // File-Schreibe
+          let currentHandle = null;
+          let lastWritten = null;
+          async function writeBackup() {{
+            if (!currentHandle) return;
+            try {{
+              const perm = await currentHandle.queryPermission({{mode:'readwrite'}});
+              if (perm !== 'granted') return;
+              const raw = window.parent.localStorage.getItem(LS_KEY);
+              if (!raw || raw === lastWritten) return;
+              const fh = await currentHandle.getFileHandle(FILE_NAME, {{create:true}});
+              const w = await fh.createWritable();
+              await w.write(raw); await w.close();
+              lastWritten = raw;
+              const ts = new Date().toLocaleTimeString('de-DE');
+              $info.innerHTML = `✅ Letzte Speicherung: ${{ts}} — <code>${{currentHandle.name}}/${{FILE_NAME}}</code>`;
+            }} catch (e) {{
+              $info.innerHTML = `<span class="err">Fehler beim Schreiben: ${{e.message}}</span>`;
+            }}
+          }}
+
+          async function setStatus() {{
+            if (!currentHandle) {{
+              $state.innerHTML = '<span class="err">nicht verbunden</span>';
+              $btn.textContent = '📁 Mit Ordner verbinden';
+              return;
+            }}
+            const perm = await currentHandle.queryPermission({{mode:'readwrite'}});
+            if (perm === 'granted') {{
+              $state.innerHTML = `<span class="ok">✅ verbunden mit <b>${{currentHandle.name}}</b></span>`;
+              $btn.textContent = '🔌 Trennen';
+            }} else {{
+              $state.innerHTML = `<span class="err">Permission abgelaufen — klick neu verbinden</span>`;
+              $btn.textContent = `🔑 ${{currentHandle.name}} neu autorisieren`;
+            }}
+          }}
+
+          async function connect() {{
+            try {{
+              if (currentHandle) {{
+                // Bereits verbunden — trennen
+                await clearHandle();
+                currentHandle = null;
+                lastWritten = null;
+                await setStatus();
+                return;
+              }}
+              const h = await window.showDirectoryPicker({{mode:'readwrite'}});
+              await saveHandle(h);
+              currentHandle = h;
+              await setStatus();
+              await writeBackup();
+            }} catch (e) {{
+              if (e.name !== 'AbortError') {{
+                $info.innerHTML = `<span class="err">${{e.message}}</span>`;
+              }}
+            }}
+          }}
+
+          $btn.addEventListener('click', connect);
+
+          // Boot: vorhandenes Handle laden
+          loadHandle().then(h => {{
+            currentHandle = h || null;
+            setStatus();
+          }});
+
+          // Poll LocalStorage: bei Änderung schreiben
+          setInterval(writeBackup, POLL_MS);
+        }})();
+        </script>
+        """,
+        height=100,
+    )
+
+
 def _enter_zu_naechstem_input():
     """JS-Snippet: Enter im text_input → blur + Fokus zum nächsten text_input.
     Fragil, weil Streamlit keine stabilen DOM-Anchors hat — wir filtern grob
@@ -160,6 +303,9 @@ with st.sidebar:
         "in iCloud/Drive ablegen — sonst weg bei Browser-Reset."
     )
 
+    # Auto-Save Widget (File System Access API, Chrome/Edge)
+    _auto_save_widget()
+
     if st.session_state["all_mappings"] or st.session_state["all_mandanten"]:
         export_data = {
             "mappings": st.session_state["all_mappings"],
@@ -167,13 +313,13 @@ with st.sidebar:
         }
         from datetime import date
         st.download_button(
-            "⬇️ Backup als JSON",
+            "⬇️ Backup als JSON (manuell)",
             data=json.dumps(export_data, indent=2, ensure_ascii=False),
             file_name=f"datev_backup_{date.today().isoformat()}.json",
             mime="application/json",
             use_container_width=True,
-            help="Empfohlen: nach jedem Monatslauf herunterladen, in "
-                 "iCloud/Drive sichern. Nächsten Monat einfach wieder hochladen.",
+            help="Manueller Download. Wenn oben Auto-Save in einen "
+                 "Ordner aktiv ist, ist das nicht nötig.",
         )
 
     st.divider()
