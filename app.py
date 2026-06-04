@@ -90,6 +90,33 @@ if "all_mandanten" not in st.session_state:
     st.session_state["all_mandanten"] = {}
 
 
+def _ls_load_at_start() -> dict:
+    """Versucht LocalStorage direkt aus Pyodide zu lesen.
+    Funktioniert nur wenn stlite im Main Thread läuft (nicht im Worker).
+    Wenn Worker → ImportError/AttributeError → wir fallen zurück auf
+    Widget-getriggerten Reload."""
+    try:
+        from js import localStorage  # type: ignore
+        raw = localStorage.getItem(LOCAL_STORAGE_KEY)
+        if not raw:
+            return {}
+        data = json.loads(raw)
+        if isinstance(data, dict) and "mappings" in data:
+            return data
+    except Exception:
+        pass
+    return {}
+
+
+# Beim ersten Start der Session: versuche aus LocalStorage zu laden
+if "ls_load_attempted" not in st.session_state:
+    st.session_state["ls_load_attempted"] = True
+    _ls_data = _ls_load_at_start()
+    if _ls_data:
+        st.session_state["all_mappings"].update(_ls_data.get("mappings") or {})
+        st.session_state["all_mandanten"].update(_ls_data.get("mandanten") or {})
+
+
 def _alles_persistieren():
     """LocalStorage-Update: speichert all_mappings + all_mandanten zusammen."""
     payload = {
@@ -187,6 +214,30 @@ def _auto_save_widget():
             }}
           }}
 
+          // File-Lesen + LocalStorage updaten, ggf. Reload
+          async function readBackupAndSyncToLS() {{
+            if (!currentHandle) return false;
+            try {{
+              const perm = await currentHandle.queryPermission({{mode:'readwrite'}});
+              if (perm !== 'granted') return false;
+              const fh = await currentHandle.getFileHandle(FILE_NAME);
+              const f = await fh.getFile();
+              const text = await f.text();
+              if (!text) return false;
+              const currentLS = window.parent.localStorage.getItem(LS_KEY);
+              if (currentLS === text) {{
+                lastWritten = text;
+                return false;
+              }}
+              window.parent.localStorage.setItem(LS_KEY, text);
+              lastWritten = text;
+              return true; // wurde geupdated
+            }} catch (e) {{
+              // File existiert noch nicht — kein Problem
+              return false;
+            }}
+          }}
+
           async function setStatus() {{
             if (!currentHandle) {{
               $state.innerHTML = '<span class="err">nicht verbunden</span>';
@@ -210,6 +261,7 @@ def _auto_save_widget():
                 await clearHandle();
                 currentHandle = null;
                 lastWritten = null;
+                sessionStorage.removeItem('autoload_done');
                 await setStatus();
                 return;
               }}
@@ -217,6 +269,15 @@ def _auto_save_widget():
               await saveHandle(h);
               currentHandle = h;
               await setStatus();
+              // Beim Verbinden: vorhandene Datei lesen + Reload damit Streamlit
+              // die Daten aufnimmt
+              const wasUpdated = await readBackupAndSyncToLS();
+              if (wasUpdated) {{
+                sessionStorage.setItem('autoload_done', '1');
+                $info.innerHTML = '📥 Geladen aus Datei — Seite wird neu geladen...';
+                setTimeout(() => window.parent.location.reload(), 600);
+                return;
+              }}
               await writeBackup();
             }} catch (e) {{
               if (e.name !== 'AbortError') {{
@@ -227,11 +288,26 @@ def _auto_save_widget():
 
           $btn.addEventListener('click', connect);
 
-          // Boot: vorhandenes Handle laden
-          loadHandle().then(h => {{
-            currentHandle = h || null;
-            setStatus();
-          }});
+          // Boot: vorhandenes Handle laden + Auto-Load aus Datei
+          (async () => {{
+            currentHandle = (await loadHandle()) || null;
+            await setStatus();
+            if (!currentHandle) return;
+
+            // Guard: nur 1x Reload pro Browser-Tab
+            const alreadyAutoloaded = sessionStorage.getItem('autoload_done');
+            if (alreadyAutoloaded) return;
+
+            // Datei lesen + LS aktualisieren
+            const wasUpdated = await readBackupAndSyncToLS();
+            if (wasUpdated) {{
+              sessionStorage.setItem('autoload_done', '1');
+              $info.innerHTML = '📥 Daten aus Datei geladen — Seite wird neu geladen...';
+              setTimeout(() => window.parent.location.reload(), 600);
+            }} else {{
+              sessionStorage.setItem('autoload_done', '1');
+            }}
+          }})();
 
           // Poll LocalStorage: bei Änderung schreiben
           setInterval(writeBackup, POLL_MS);
