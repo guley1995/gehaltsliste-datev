@@ -20,7 +20,6 @@ LOHNART_MAPPING = [
     {"excel_col": "L", "excel_header": "Vorschuss",                            "lohnart": "9000", "feld": "wert",    "label": "Vorschuss"},
     {"excel_col": "M", "excel_header": "Einbehaltenes Bargeld",                "lohnart": "9001", "feld": "wert",    "label": "Einbehaltenes Bargeld"},
     {"excel_col": "N", "excel_header": "Verpflegungspauschale",                "lohnart": "9650", "feld": "wert",    "label": "Verpflegungszuschuss"},
-    {"excel_col": "O", "excel_header": "Fughafengebühr",                       "lohnart": "9651", "feld": "wert",    "label": "Flughafengebühr"},
     {"excel_col": "P", "excel_header": "Trinkgeld von Fahrgästen",             "lohnart": "9652", "feld": "wert",    "label": "Trinkgeld von Fahrgästen"},
 ]
 

@@ -36,7 +36,6 @@ Konfiguriert in [`mapping.py`](mapping.py):
 | L `Vorschuss` | EUR | 9000 Vorschuss |
 | M `Einbehaltenes Bargeld` | EUR | 9001 Einbehaltenes Bargeld |
 | N `Verpflegungspauschale` | EUR | 9650 Verpflegungszuschuss |
-| O `Flughafengebühr` | EUR | 9651 Flughafengebühr |
 | P `Trinkgeld von Fahrgästen` | EUR | 9652 Trinkgeld von Fahrgästen |
 
 Spalte **R `Krank`** (LA 1650) wird **nicht** in die CSV geschrieben — die Krank-Tage werden direkt im DATEV-Kalender gepflegt.  
