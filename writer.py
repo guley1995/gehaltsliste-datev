@@ -87,6 +87,16 @@ def baue_csv(
                 # bleibt Spalte 3 leer. DATEV erkennt anhand der Lohnart, ob
                 # der Wert in Std oder EUR ist.
                 der_wert = stunden if feld == "stunden" else wert
+
+                # Bei LA 1000 (Stundenlohn) den Excel-Stundensatz in Spalte 7
+                # (Abweichende Lohnveränderung) mitgeben — überschreibt den
+                # Stamm-Stundensatz pro Bewegung. ACHTUNG: ob DATEV das so
+                # interpretiert, muss beim ersten Testimport verifiziert
+                # werden (Feldbedeutung "Abw. LV" kann je nach Mandant variieren).
+                lohn_ver = ""
+                if lohnart == "1000" and ma.stundensatz > 0:
+                    lohn_ver = _komma(ma.stundensatz)
+
                 zeile = ";".join([
                     ma.pers_nr,   # 1 PersNr
                     lohnart,      # 2 Lohnart
@@ -94,7 +104,7 @@ def baue_csv(
                     "",           # 4 Tage
                     der_wert,     # 5 Wert (Std oder EUR)
                     "",           # 6 Faktor
-                    "",           # 7 LohnVer
+                    lohn_ver,     # 7 Abweichende Lohnveränderung (=Stundensatz bei LA 1000)
                     "",           # 8 KostST
                     "",           # 9 KostTr
                 ])

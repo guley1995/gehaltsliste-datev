@@ -873,10 +873,14 @@ for idx, f in enumerate(uploads):
         f"1. DATEV LuG öffnen, **Mandant {firma}** wählen\n"
         f"2. Menü **`Erfassen → Bewegungsdaten → Importieren`**\n"
         f"3. **Importprofil wählen** (einmalig vorher angelegt unter "
-        f"`Extras → ASCII-Import Assistent`: 11 Spalten, Trennzeichen Semikolon, "
+        f"`Extras → ASCII-Import Assistent`: 9 Spalten, Trennzeichen Semikolon, "
         f"Encoding ANSI/CP1252)\n"
         f"4. Heruntergeladene CSV auswählen → **Importieren**\n\n"
-        f"⚠️ Krank-Tage werden separat in DATEV-Kalender gepflegt (nicht in CSV)."
+        f"⚠️ Krank-Tage werden separat in DATEV-Kalender gepflegt (nicht in CSV).  \n"
+        f"⚠️ **Stundensatz**: Bei LA 1000 wird der Excel-Stundensatz in Spalte 7 "
+        f"(Abweichende Lohnveränderung) mitgegeben. Beim ersten Testimport prüfen, "
+        f"ob DATEV das als Stundensatz-Override versteht und die Brutto-Werte "
+        f"stimmen. Falls nicht, sag Bescheid – wir passen das Mapping an."
     )
 
     with st.expander("Werte-Vorschau"):
