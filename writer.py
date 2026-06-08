@@ -88,14 +88,14 @@ def baue_csv(
                 # der Wert in Std oder EUR ist.
                 der_wert = stunden if feld == "stunden" else wert
 
-                # Bei LA 1000 (Stundenlohn) den Excel-Stundensatz in Spalte 7
-                # (Abweichende Lohnveränderung) mitgeben — überschreibt den
-                # Stamm-Stundensatz pro Bewegung. ACHTUNG: ob DATEV das so
-                # interpretiert, muss beim ersten Testimport verifiziert
-                # werden (Feldbedeutung "Abw. LV" kann je nach Mandant variieren).
-                lohn_ver = ""
-                if lohnart == "1000" and ma.stundensatz > 0:
-                    lohn_ver = _komma(ma.stundensatz)
+                # Stundensatz-Override bei ALLEN Stunden-Lohnarten in Spalte 6
+                # (Abweichender Faktor). DATEV-Doku: "Abweichender Faktor"
+                # entspricht dem Stundenlohn und überschreibt den Stamm-Wert
+                # pro Bewegung. Bei EUR-Lohnarten (Trinkgeld, Verpflegung etc.)
+                # ist der Stundensatz irrelevant -> leer.
+                faktor = ""
+                if feld == "stunden" and ma.stundensatz > 0:
+                    faktor = _komma(ma.stundensatz)
 
                 zeile = ";".join([
                     ma.pers_nr,   # 1 PersNr
@@ -103,8 +103,8 @@ def baue_csv(
                     "",           # 3 Stundenanzahl (LEER — hat 24h-Limit)
                     "",           # 4 Tage
                     der_wert,     # 5 Wert (Std oder EUR)
-                    "",           # 6 Faktor
-                    lohn_ver,     # 7 Abweichende Lohnveränderung (=Stundensatz bei LA 1000)
+                    faktor,       # 6 Abweichender Faktor (= Stundensatz bei Stunden-LAs)
+                    "",           # 7 Abweichende Lohnveränderung (für Prozent-Zuschläge, nicht genutzt)
                     "",           # 8 KostST
                     "",           # 9 KostTr
                 ])

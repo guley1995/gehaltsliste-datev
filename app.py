@@ -548,28 +548,32 @@ DATEV Lohn und Gehalt
 
 ### Schritt 3: „Aufbau des Datensatzes" — die 9 Spalten
 
-| Spaltennr | Feldinhalt |
-|:---:|---|
-| 1 | **Personalnummer** |
-| 2 | **Lohnartennummer** |
-| 3 | **Stundenanzahl** |
-| 4 | **Tagesanzahl** |
-| 5 | **Wert** |
-| 6 | **Abweichender Faktor** |
-| 7 | **Abweichende Lohnveränderung** |
-| 8 | **Kostenstellennummer** |
-| 9 | **Kostenträger** |
+| Spaltennr | Feldinhalt | Was die App reinschreibt |
+|:---:|---|---|
+| 1 | **Personalnummer** | aus PersNr-Mapping |
+| 2 | **Lohnartennummer** | z.B. 1000, 1500, 9001 … |
+| 3 | **Stundenanzahl** | leer (24h-Limit) |
+| 4 | **Tagesanzahl** | leer |
+| 5 | **Wert** | Stunden ODER EUR (DATEV erkennt anhand LA) |
+| 6 | **Abweichender Faktor** | Stundensatz (überschreibt Stamm-Wert) |
+| 7 | **Abweichende Lohnveränderung** | leer |
+| 8 | **Kostenstellennummer** | leer |
+| 9 | **Kostenträger** | leer |
 
 **Wichtig:** KEIN Kalendertag, KEIN Ausfallschlüssel. → Profil speichern.
 
-### Wichtige Eigenheit des CSV-Formats
+### Wichtige Eigenheiten des CSV-Formats
 
-Die App schreibt **alle Werte (Stunden UND EUR) in Spalte 5 (Wert)** —
-Spalte 3 (Stundenanzahl) bleibt leer. Das DATEV-Feld „Stundenanzahl"
-hat ein hartes 24h-Limit (auch wenn der Name irreführend ist).
-Stunden über 24h wären sonst abgewiesen. DATEV erkennt anhand der
-Lohnart, ob ein Wert Std oder EUR ist (zeigt in der Maske die richtige
-Einheit).
+**Spalte 5 (Wert) statt Spalte 3 (Stundenanzahl):** Das DATEV-Feld
+„Stundenanzahl" hat ein hartes 24h-Limit, daher schreiben wir alle
+Werte (Stunden UND EUR) in Spalte 5. DATEV erkennt anhand der Lohnart,
+ob es sich um Stunden oder EUR handelt.
+
+**Spalte 6 (Abweichender Faktor) = Stundensatz pro Bewegung:** Die App
+schreibt bei jeder Stunden-Lohnart den individuellen Stundensatz aus
+der Excel hier rein. DATEV nutzt diesen Wert **vorrangig vor dem
+Stamm-Stundensatz**. So muss der Stundensatz im Mitarbeiterstamm nicht
+mehr monatlich manuell aktualisiert werden.
 
 ### Schritt 4: Monatlicher Import
 
@@ -877,10 +881,10 @@ for idx, f in enumerate(uploads):
         f"Encoding ANSI/CP1252)\n"
         f"4. Heruntergeladene CSV auswählen → **Importieren**\n\n"
         f"⚠️ Krank-Tage werden separat in DATEV-Kalender gepflegt (nicht in CSV).  \n"
-        f"⚠️ **Stundensatz**: Bei LA 1000 wird der Excel-Stundensatz in Spalte 7 "
-        f"(Abweichende Lohnveränderung) mitgegeben. Beim ersten Testimport prüfen, "
-        f"ob DATEV das als Stundensatz-Override versteht und die Brutto-Werte "
-        f"stimmen. Falls nicht, sag Bescheid – wir passen das Mapping an."
+        f"ℹ️ **Stundensatz** wird bei allen Stunden-Lohnarten in Spalte 6 "
+        f"(Abweichender Faktor) mitgegeben – DATEV nutzt diesen Wert vorrangig "
+        f"vor dem Stamm-Stundensatz. Heißt: kein manuelles Stamm-Update mehr "
+        f"nötig pro Monat."
     )
 
     with st.expander("Werte-Vorschau"):
