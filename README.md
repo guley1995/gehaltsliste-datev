@@ -32,13 +32,13 @@ Konfiguriert in [`mapping.py`](mapping.py):
 | G `Zuschlag 40%` | Std | 1501 Nachtzuschlag 40% frei |
 | H `Sonntagszuschlag 50%` | Std | 1510 Sonntagszuschlag 50% frei |
 | I `Feiertagszuschlag 125%` | Std | 1520 Feiertagszuschlag 125% frei |
-| Q `Urlaub` | EUR | 1600 Urlaub (EUR/Stundensatz → Std) |
+| P `Urlaub` | EUR | 1600 Urlaub (EUR/Stundensatz → Std) |
 | L `Vorschuss` | EUR | 9000 Vorschuss |
 | M `Einbehaltenes Bargeld` | EUR | 9001 Einbehaltenes Bargeld |
 | N `Verpflegungspauschale` | EUR | 9650 Verpflegungszuschuss |
-| P `Trinkgeld von Fahrgästen` | EUR | 9652 Trinkgeld von Fahrgästen |
+| O `Trinkgeld von Fahrgästen` | EUR | 9652 Trinkgeld von Fahrgästen |
 
-Spalte **R `Krank`** (LA 1650) wird **nicht** in die CSV geschrieben — die Krank-Tage werden direkt im DATEV-Kalender gepflegt.  
+Spalte **Q `Krank`** (LA 1650) wird **nicht** in die CSV geschrieben — die Krank-Tage werden direkt im DATEV-Kalender gepflegt.  
 Spalte **K `Grundgehalt`** ist eine Excel-interne Prüfsumme (B × C) und dient nur dem Soll-Abgleich nach Import.
 
 ## CSV-Format (DATEV Lohn und Gehalt — Monatserfassung)

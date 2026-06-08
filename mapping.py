@@ -15,18 +15,18 @@ LOHNART_MAPPING = [
     {"excel_col": "H", "excel_header": "Stunden. Sonntagszuschlag  50%",       "lohnart": "1510", "feld": "stunden", "label": "Sonntagszuschlag 50% frei"},
     {"excel_col": "I", "excel_header": "Stunden. Feiertagszuschlag 125%",      "lohnart": "1520", "feld": "stunden", "label": "Feiertagszuschlag 125% frei"},
     # Urlaub: Excel hat €, DATEV will Stunden -> teilen durch Stundensatz
-    {"excel_col": "Q", "excel_header": "Urlaub",                               "lohnart": "1600", "feld": "stunden", "label": "Urlaub", "umrechnen": "eur_durch_stundensatz"},
+    {"excel_col": "P", "excel_header": "Urlaub",                               "lohnart": "1600", "feld": "stunden", "label": "Urlaub", "umrechnen": "eur_durch_stundensatz"},
     # EUR-Beträge
     {"excel_col": "L", "excel_header": "Vorschuss",                            "lohnart": "9000", "feld": "wert",    "label": "Vorschuss"},
     {"excel_col": "M", "excel_header": "Einbehaltenes Bargeld",                "lohnart": "9001", "feld": "wert",    "label": "Einbehaltenes Bargeld"},
     {"excel_col": "N", "excel_header": "Verpflegungspauschale",                "lohnart": "9650", "feld": "wert",    "label": "Verpflegungszuschuss"},
-    {"excel_col": "P", "excel_header": "Trinkgeld von Fahrgästen",             "lohnart": "9652", "feld": "wert",    "label": "Trinkgeld von Fahrgästen"},
+    {"excel_col": "O", "excel_header": "Trinkgeld von Fahrgästen",             "lohnart": "9652", "feld": "wert",    "label": "Trinkgeld von Fahrgästen"},
 ]
 
 # Nicht in den DATEV-Import übernehmen — wird in DATEV anderswo gepflegt.
 # Werte aus diesen Spalten werden in der App nur als Hinweis angezeigt.
 MANUELL_IN_DATEV = [
-    {"excel_col": "R", "excel_header": "Krank", "lohnart": "1650",
+    {"excel_col": "Q", "excel_header": "Krank", "lohnart": "1650",
      "hinweis": "LA 1650 Krank wird über den DATEV-Kalender gepflegt (AU-Tage). "
                 "Nicht via CSV-Import — bitte sicherstellen, dass die AU-Tage im "
                 "DATEV-Kalender erfasst sind."},

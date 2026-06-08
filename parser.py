@@ -125,7 +125,7 @@ def parse_excel(file_bytes: bytes) -> ParseResult:
     name_to_tab = _baue_namen_index(wb.sheetnames)
 
     name_col_idx = _col_letter_to_index(NAME_COL)
-    info_col_idx = _col_letter_to_index("W")
+    info_col_idx = _col_letter_to_index("V")  # Spalte INFO (war W, nach Entfernung der Flughafengebühr-Spalte O)
 
     mapped_cols = [(m, _col_letter_to_index(m["excel_col"])) for m in LOHNART_MAPPING]
     manuell_cols = [(u, _col_letter_to_index(u["excel_col"])) for u in MANUELL_IN_DATEV]
