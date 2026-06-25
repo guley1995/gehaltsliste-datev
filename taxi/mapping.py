@@ -29,8 +29,7 @@ LOHNART_MAPPING = [
     {"excel_col": "G", "excel_header": "40% ZS",            "lohnart": "1501", "feld": "wert", "label": "Nachtzuschlag 40% frei"},
     {"excel_col": "H", "excel_header": "50% ZS",            "lohnart": "1510", "feld": "wert", "label": "Sonntagszuschlag 50% frei"},
     {"excel_col": "I", "excel_header": "125% ZS",           "lohnart": "1520", "feld": "wert", "label": "Feiertagszuschlag 125% frei"},
-    # Best-Guess: 150% Zuschlag → LA 1525 (Buchhalterin korrigiert beim Testimport)
-    {"excel_col": "J", "excel_header": "150% ZS",           "lohnart": "1525", "feld": "wert", "label": "Zuschlag 150% frei (Vermutung — bitte prüfen)"},
+    {"excel_col": "J", "excel_header": "150% ZS",           "lohnart": "1521", "feld": "wert", "label": "Zuschlag 150% frei"},
     # Abschlag (Spalte L) = ausgezahltes Bargeld, in DATEV als negative Buchung (Einbehaltenes Bargeld)
     {"excel_col": "L", "excel_header": "Abschlag",          "lohnart": "9001", "feld": "wert", "label": "Einbehaltenes Bargeld", "vorzeichen_umkehren": True},
     # Vorschuss (Spalte M) als Abzug
