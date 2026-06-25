@@ -23,7 +23,7 @@ import streamlit as st
 from config import LOGO_TAGLINE, LOGO_TEXT, LOGO_URL, PASSWORT_AKTIV, PASSWORT_HASH
 from mapping import LOHNART_MAPPING, MANUELL_IN_DATEV
 from parser import firma_aus_dateiname, monat_jahr_aus_dateiname, parse_excel
-from writer import EncodingError, baue_csv, csv_bytes
+from writer import EncodingError, baue_csv, baue_stammdaten_csv, csv_bytes
 
 
 st.set_page_config(page_title="Taxi-Lohnliste → DATEV", layout="wide")
@@ -338,7 +338,7 @@ for idx, f in enumerate(uploads):
     if not beraternr.strip() or not mandantennr.strip():
         st.warning("⚠️ Ohne Berater- und Mandantennummer wird der Import in DATEV abgelehnt.")
 
-    # CSV bauen
+    # Bewegungsdaten-CSV bauen
     csv_text, stat = baue_csv(parse.mitarbeiter, int(jahr), int(monat),
                               beraternr=beraternr.strip(), mandantennr=mandantennr.strip())
     try:
@@ -351,22 +351,44 @@ for idx, f in enumerate(uploads):
     out_name = f"{firma}_{int(jahr):04d}-{int(monat):02d}_TAXI_DATEV.csv".replace(" ", "_")
     generierte.append((out_name, data))
 
-    c1, c2, c3 = st.columns(3)
+    # Stammdaten-CSV bauen (Stundenlohn-Update)
+    stamm_text, stamm_stat = baue_stammdaten_csv(parse.mitarbeiter, int(jahr), int(monat))
+    try:
+        stamm_data = csv_bytes(stamm_text, encoding=encoding)
+    except EncodingError:
+        stamm_data = csv_bytes(stamm_text, encoding="utf-8")
+    stamm_name = f"{firma}_{int(jahr):04d}-{int(monat):02d}_TAXI_STAMM_Stundenlohn.csv".replace(" ", "_")
+    generierte.append((stamm_name, stamm_data))
+
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("Mitarbeiter", len(parse.mitarbeiter))
-    c2.metric("CSV-Zeilen", stat["zeilen_geschrieben"])
-    c3.metric("Abrechnungsmonat", stat["abrechnungsmonat"])
+    c2.metric("Bewegungs-Zeilen", stat["zeilen_geschrieben"])
+    c3.metric("Stamm-Zeilen", stamm_stat["zeilen_geschrieben"])
+    c4.metric("Abrechnungsmonat", stat["abrechnungsmonat"])
 
     if encoding_err:
         st.error(f"❌ Encoding: {encoding_err}")
 
-    st.download_button("⬇️ CSV herunterladen", data=data, file_name=out_name,
-                       mime="text/csv", key=f"dl_{idx}",
-                       type="primary", use_container_width=True)
+    st.markdown("### 📥 Download — beide CSVs, **Reihenfolge wichtig**")
+    dl_col1, dl_col2 = st.columns(2)
+    dl_col1.download_button(
+        "1️⃣ Stammdaten-CSV (Stundenlohn)",
+        data=stamm_data, file_name=stamm_name, mime="text/csv",
+        key=f"dl_stamm_{idx}", type="primary", use_container_width=True,
+        help="Zuerst in DATEV einspielen — aktualisiert den Stundenlohn pro Mitarbeiter mit Historie.",
+    )
+    dl_col2.download_button(
+        "2️⃣ Bewegungsdaten-CSV (Stunden + EUR)",
+        data=data, file_name=out_name, mime="text/csv",
+        key=f"dl_{idx}", type="primary", use_container_width=True,
+        help="Danach in DATEV einspielen — DATEV rechnet Stunden × aktualisierter Stundenlohn.",
+    )
 
-    st.success(
-        f"**Import in DATEV:** Mandant {firma} → "
-        f"`Erfassen → Bewegungsdaten → Importieren` → Hersteller `Huen Monat 2` → "
-        f"Tab **Monatserfassung** → CSV wählen → Übernehmen"
+    st.info(
+        f"**Import-Reihenfolge in DATEV für {firma}:**\n\n"
+        f"1️⃣ **Stammdaten-CSV** → `Stammdaten → ASCII-Import-Assistent` → Stunden-/Tagelöhne\n\n"
+        f"2️⃣ **Bewegungsdaten-CSV** → `Erfassen → Bewegungsdaten → Importieren` → Hersteller `Huen Monat 2` → Tab Monatserfassung\n\n"
+        f"DATEV rechnet danach automatisch: Stunden × Stundenlohn = Brutto."
     )
 
     with st.expander("Werte-Vorschau"):
