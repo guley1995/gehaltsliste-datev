@@ -350,24 +350,54 @@ for idx, f in enumerate(uploads):
             st.error(w)
         continue
 
+    # Firma als Dropdown aus gespeicherten Mandanten + "+ Neue Firma anlegen"
+    NEU_OPTION = "+ Neue Firma anlegen..."
+    mandanten_namen = sorted(st.session_state["mandanten"].keys())
+    dropdown_optionen = mandanten_namen + [NEU_OPTION]
+    default_idx = dropdown_optionen.index(firma_default) if firma_default in dropdown_optionen else (
+        len(dropdown_optionen) - 1  # Wenn nicht gefunden, "+ Neue Firma" als Default
+    )
+
     col_f, col_j, col_m = st.columns([2, 1, 1])
-    firma = col_f.text_input("Firma / DATEV-Mandant", value=firma_default, key=f"fi_{idx}")
+    auswahl = col_f.selectbox(
+        "Firma / DATEV-Mandant",
+        options=dropdown_optionen,
+        index=default_idx,
+        key=f"fi_select_{idx}",
+        help="Aus den gespeicherten Mandanten wählen — Berater/Mandantennr werden automatisch geladen.",
+    )
     jahr = col_j.number_input("Jahr", value=jm[0], min_value=2000, max_value=2100, step=1, key=f"y_{idx}")
     monat = col_m.number_input("Monat", value=jm[1], min_value=1, max_value=12, step=1, key=f"m_{idx}")
 
-    meta = st.session_state["mandanten"].setdefault(firma, {})
-    col_b, col_mn = st.columns(2)
-    beraternr = col_b.text_input("Beraternummer", value=meta.get("beraternr", ""),
-                                  key=f"ber_{idx}", placeholder="z.B. 1479590")
-    mandantennr = col_mn.text_input("Mandantennummer", value=meta.get("mandantennr", ""),
-                                     key=f"mdt_{idx}", placeholder="z.B. 10003")
-    if beraternr.strip() != meta.get("beraternr", "") or mandantennr.strip() != meta.get("mandantennr", ""):
-        if beraternr.strip() or mandantennr.strip():
-            meta["beraternr"] = beraternr.strip()
-            meta["mandantennr"] = mandantennr.strip()
-        else:
-            st.session_state["mandanten"].pop(firma, None)
-        _persist()
+    if auswahl == NEU_OPTION:
+        # Neue Firma: alle drei Felder freitext
+        firma = st.text_input(
+            "Firmen-Name", value=firma_default if firma_default not in st.session_state["mandanten"] else "",
+            key=f"fi_neu_{idx}", placeholder="z.B. GOS Taxi GmbH",
+        )
+        col_b, col_mn = st.columns(2)
+        beraternr = col_b.text_input("Beraternummer", value="",
+                                      key=f"ber_{idx}", placeholder="z.B. 1479590")
+        mandantennr = col_mn.text_input("Mandantennummer", value="",
+                                         key=f"mdt_{idx}", placeholder="z.B. 10003")
+        # Beim ersten gültigen Eintrag in Session speichern
+        if firma.strip() and beraternr.strip() and mandantennr.strip():
+            st.session_state["mandanten"][firma.strip()] = {
+                "beraternr": beraternr.strip(),
+                "mandantennr": mandantennr.strip(),
+            }
+            _persist()
+            st.success(f"✅ '{firma.strip()}' angelegt mit Berater {beraternr.strip()} / Mandant {mandantennr.strip()}")
+            firma = firma.strip()
+    else:
+        firma = auswahl
+        meta = st.session_state["mandanten"][firma]
+        beraternr = meta.get("beraternr", "")
+        mandantennr = meta.get("mandantennr", "")
+        # Read-only Anzeige
+        col_b, col_mn = st.columns(2)
+        col_b.text_input("Beraternummer", value=beraternr, key=f"ber_{idx}", disabled=True)
+        col_mn.text_input("Mandantennummer", value=mandantennr, key=f"mdt_{idx}", disabled=True)
 
     if not beraternr.strip() or not mandantennr.strip():
         st.warning("⚠️ Ohne Berater- und Mandantennummer wird der Import in DATEV abgelehnt.")
