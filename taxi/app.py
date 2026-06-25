@@ -370,16 +370,58 @@ for idx, f in enumerate(uploads):
     monat = col_m.number_input("Monat", value=jm[1], min_value=1, max_value=12, step=1, key=f"m_{idx}")
 
     if auswahl == NEU_OPTION:
-        # Neue Firma: alle drei Felder freitext
+        # Neue Firma: Name als Freitext, Berater + Mandantennr als Dropdown
+        # (mit allen bereits genutzten Werten) + Option "+ Neu eingeben..."
         firma = st.text_input(
             "Firmen-Name", value=firma_default if firma_default not in st.session_state["mandanten"] else "",
             key=f"fi_neu_{idx}", placeholder="z.B. GOS Taxi GmbH",
         )
+
+        # Bisher genutzte Berater- und Mandantennummern sammeln
+        NEU_NR = "+ Neu eingeben..."
+        bisherige_berater = sorted({
+            m.get("beraternr", "").strip()
+            for m in st.session_state["mandanten"].values()
+            if m.get("beraternr", "").strip()
+        })
+        bisherige_mandanten = sorted({
+            m.get("mandantennr", "").strip()
+            for m in st.session_state["mandanten"].values()
+            if m.get("mandantennr", "").strip()
+        })
+
         col_b, col_mn = st.columns(2)
-        beraternr = col_b.text_input("Beraternummer", value="",
-                                      key=f"ber_{idx}", placeholder="z.B. 1479590")
-        mandantennr = col_mn.text_input("Mandantennummer", value="",
-                                         key=f"mdt_{idx}", placeholder="z.B. 10003")
+
+        # Beraternummer-Dropdown
+        ber_optionen = bisherige_berater + [NEU_NR]
+        ber_default = 0 if bisherige_berater else 0
+        ber_sel = col_b.selectbox(
+            "Beraternummer", options=ber_optionen,
+            index=ber_default, key=f"ber_sel_{idx}",
+        )
+        if ber_sel == NEU_NR:
+            beraternr = col_b.text_input(
+                "Neue Beraternummer", value="", key=f"ber_neu_{idx}",
+                placeholder="z.B. 1479590", label_visibility="collapsed",
+            )
+        else:
+            beraternr = ber_sel
+
+        # Mandantennummer-Dropdown
+        mdt_optionen = bisherige_mandanten + [NEU_NR]
+        mdt_default = len(mdt_optionen) - 1  # default "+ Neu eingeben..." bei neuer Firma
+        mdt_sel = col_mn.selectbox(
+            "Mandantennummer", options=mdt_optionen,
+            index=mdt_default, key=f"mdt_sel_{idx}",
+        )
+        if mdt_sel == NEU_NR:
+            mandantennr = col_mn.text_input(
+                "Neue Mandantennummer", value="", key=f"mdt_neu_{idx}",
+                placeholder="z.B. 10003", label_visibility="collapsed",
+            )
+        else:
+            mandantennr = mdt_sel
+
         # Beim ersten gültigen Eintrag in Session speichern
         if firma.strip() and beraternr.strip() and mandantennr.strip():
             st.session_state["mandanten"][firma.strip()] = {
