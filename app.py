@@ -878,20 +878,33 @@ for idx, f in enumerate(uploads):
             f"(beide Seiten konsistent)."
         )
 
-    st.markdown("### 📥 Download — beide CSVs, **Reihenfolge wichtig**")
-    dl_col1, dl_col2 = st.columns(2)
-    dl_col1.download_button(
-        "1️⃣ Stammdaten-CSV (Stundenlohn)",
-        data=stamm_data, file_name=stamm_name, mime="text/csv",
-        key=f"dl_stamm_{idx}_{f.name}", type="primary", use_container_width=True,
-        help="Zuerst in DATEV einspielen — aktualisiert den Stundenlohn pro Mitarbeiter mit Historie.",
+    # Beide CSVs in ein ZIP packen → ein Download-Button
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(f"1_STAMM_{stamm_name}", stamm_data)
+        zf.writestr(f"2_BEWEGUNG_{out_name}", data)
+    zip_name = f"{firma}_{int(jahr):04d}-{int(monat):02d}_DATEV-Komplett.zip".replace(" ", "_")
+
+    st.download_button(
+        "⬇️ Beide CSVs herunterladen (ZIP)",
+        data=zip_buf.getvalue(), file_name=zip_name, mime="application/zip",
+        key=f"dl_zip_{idx}_{f.name}", type="primary", use_container_width=True,
+        help="Enthält Stammdaten-CSV (1_STAMM…) und Bewegungsdaten-CSV (2_BEWEGUNG…). "
+             "Reihenfolge im Dateinamen — erst die 1, dann die 2 in DATEV importieren.",
     )
-    dl_col2.download_button(
-        "2️⃣ Bewegungsdaten-CSV (Stunden + EUR)",
-        data=data, file_name=out_name, mime="text/csv",
-        key=f"dl_{idx}_{f.name}", type="primary", use_container_width=True,
-        help="Danach in DATEV einspielen — DATEV rechnet Stunden × aktualisierter Stundenlohn.",
-    )
+
+    with st.expander("Einzelne CSVs (optional)"):
+        ec1, ec2 = st.columns(2)
+        ec1.download_button(
+            "1️⃣ Stammdaten-CSV",
+            data=stamm_data, file_name=stamm_name, mime="text/csv",
+            key=f"dl_stamm_{idx}_{f.name}", use_container_width=True,
+        )
+        ec2.download_button(
+            "2️⃣ Bewegungsdaten-CSV",
+            data=data, file_name=out_name, mime="text/csv",
+            key=f"dl_{idx}_{f.name}", use_container_width=True,
+        )
 
     st.info(
         f"**Import-Reihenfolge in DATEV für {firma}:**\n\n"
