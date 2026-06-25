@@ -88,23 +88,17 @@ def baue_csv(
                 # der Wert in Std oder EUR ist.
                 der_wert = stunden if feld == "stunden" else wert
 
-                # Stundensatz-Override bei ALLEN Stunden-Lohnarten in Spalte 6
-                # (Abweichender Faktor). DATEV-Doku: "Abweichender Faktor"
-                # entspricht dem Stundenlohn und überschreibt den Stamm-Wert
-                # pro Bewegung. Bei EUR-Lohnarten (Trinkgeld, Verpflegung etc.)
-                # ist der Stundensatz irrelevant -> leer.
-                faktor = ""
-                if feld == "stunden" and ma.stundensatz > 0:
-                    faktor = _komma(ma.stundensatz)
-
+                # KEIN Stundensatz mehr in Spalte 6 — DATEV trennt strikt
+                # Stamm (Stundenlohn EUR, ST01) und Bewegung (geleistete Std).
+                # Stundenlohn-Updates kommen über separate Stammdaten-CSV.
                 zeile = ";".join([
                     ma.pers_nr,   # 1 PersNr
                     lohnart,      # 2 Lohnart
                     "",           # 3 Stundenanzahl (LEER — hat 24h-Limit)
                     "",           # 4 Tage
                     der_wert,     # 5 Wert (Std oder EUR)
-                    faktor,       # 6 Abweichender Faktor (= Stundensatz bei Stunden-LAs)
-                    "",           # 7 Abweichende Lohnveränderung (für Prozent-Zuschläge, nicht genutzt)
+                    "",           # 6 Abweichender Faktor (LEER — Stammdaten regeln Stundenlohn)
+                    "",           # 7 Abweichende Lohnveränderung
                     "",           # 8 KostST
                     "",           # 9 KostTr
                 ])
@@ -168,3 +162,54 @@ def _kann_encoden(ch: str, encoding: str) -> bool:
         return True
     except UnicodeEncodeError:
         return False
+
+
+def _punkt(value: float) -> str:
+    """Stammdaten-CSV nutzt Punkt als Dezimaltrennzeichen (15.50)."""
+    return f"{value:.2f}"
+
+
+def baue_stammdaten_csv(
+    mitarbeiter: List[MitarbeiterZeile],
+    jahr: int,
+    monat: int,
+    stundenlohn_nr: int = 1,
+) -> Tuple[str, dict]:
+    """Stammdaten-CSV für Stundenlohn-Update pro Mitarbeiter.
+
+    Format:
+      MitarbeiterNr;GueltigAb;StundenlohnNr;Betrag
+      10001;06/2026;1;15.50
+
+    DATEV legt durch das Datum automatisch eine neue Historien-Zeile an
+    (alte Einträge bleiben erhalten).
+    Import: ASCII-Import-Assistent → Stammdaten → Stunden-/Tagelöhne.
+    """
+    abr_monat = f"{monat:02d}/{jahr:04d}"
+    buf = StringIO()
+    buf.write("MitarbeiterNr;GueltigAb;StundenlohnNr;Betrag\r\n")
+
+    geschrieben = 0
+    uebersprungen: List[str] = []
+    for ma in mitarbeiter:
+        if not ma.pers_nr:
+            uebersprungen.append(f"{ma.name} (keine PersNr)")
+            continue
+        if ma.stundensatz <= 0:
+            uebersprungen.append(f"{ma.name} PersNr {ma.pers_nr} (kein Stundensatz)")
+            continue
+        zeile = ";".join([
+            ma.pers_nr,
+            abr_monat,
+            str(stundenlohn_nr),
+            _punkt(ma.stundensatz),
+        ])
+        buf.write(zeile + "\r\n")
+        geschrieben += 1
+
+    return buf.getvalue(), {
+        "zeilen_geschrieben": geschrieben,
+        "uebersprungen": uebersprungen,
+        "abrechnungsmonat": abr_monat,
+        "stundenlohn_nr": stundenlohn_nr,
+    }

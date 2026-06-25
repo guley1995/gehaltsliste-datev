@@ -22,7 +22,7 @@ import streamlit as st
 from config import LOGO_TAGLINE, LOGO_TEXT, LOGO_URL, PASSWORT_AKTIV, PASSWORT_HASH
 from mapping import LOHNART_MAPPING, MANUELL_IN_DATEV
 from parser import firma_aus_dateiname, monat_jahr_aus_dateiname, parse_excel
-from writer import MODUS_KALENDER, MODUS_MONAT, EncodingError, baue_csv, csv_bytes
+from writer import MODUS_KALENDER, MODUS_MONAT, EncodingError, baue_csv, baue_stammdaten_csv, csv_bytes
 
 st.set_page_config(page_title="Gehaltsliste → DATEV", layout="wide")
 
@@ -853,12 +853,22 @@ for idx, f in enumerate(uploads):
     out_name = f"{firma}_{int(jahr):04d}-{int(monat):02d}_DATEV.csv".replace(" ", "_")
     generierte.append((out_name, data))
 
-    c1, c2, c3, c4 = st.columns(4)
+    # Stammdaten-CSV bauen (Stundenlohn-Update)
+    stamm_text, stamm_stat = baue_stammdaten_csv(parse.mitarbeiter, int(jahr), int(monat))
+    try:
+        stamm_data = csv_bytes(stamm_text, encoding=encoding)
+    except EncodingError:
+        stamm_data = csv_bytes(stamm_text, encoding="utf-8")
+    stamm_name = f"{firma}_{int(jahr):04d}-{int(monat):02d}_STAMM_Stundenlohn.csv".replace(" ", "_")
+    generierte.append((stamm_name, stamm_data))
+
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Mitarbeiter", len(parse.mitarbeiter))
-    c2.metric("CSV-Zeilen", stat["zeilen_geschrieben"])
-    c3.metric("Übersprungen",
+    c2.metric("Bewegungs-Zeilen", stat["zeilen_geschrieben"])
+    c3.metric("Stamm-Zeilen", stamm_stat["zeilen_geschrieben"])
+    c4.metric("Übersprungen",
               len(stat["uebersprungen_keine_persnr"]) + len(stat["uebersprungen_keine_werte"]))
-    c4.metric("Kalendertag", stat["kalendertag"])
+    c5.metric("Kalendertag", stat["kalendertag"])
 
     if encoding_err:
         st.error(
@@ -868,23 +878,27 @@ for idx, f in enumerate(uploads):
             f"(beide Seiten konsistent)."
         )
 
-    st.download_button("⬇️ CSV herunterladen", data=data, file_name=out_name,
-                       mime="text/csv", key=f"dl_{idx}_{f.name}",
-                       type="primary", use_container_width=True)
+    st.markdown("### 📥 Download — beide CSVs, **Reihenfolge wichtig**")
+    dl_col1, dl_col2 = st.columns(2)
+    dl_col1.download_button(
+        "1️⃣ Stammdaten-CSV (Stundenlohn)",
+        data=stamm_data, file_name=stamm_name, mime="text/csv",
+        key=f"dl_stamm_{idx}_{f.name}", type="primary", use_container_width=True,
+        help="Zuerst in DATEV einspielen — aktualisiert den Stundenlohn pro Mitarbeiter mit Historie.",
+    )
+    dl_col2.download_button(
+        "2️⃣ Bewegungsdaten-CSV (Stunden + EUR)",
+        data=data, file_name=out_name, mime="text/csv",
+        key=f"dl_{idx}_{f.name}", type="primary", use_container_width=True,
+        help="Danach in DATEV einspielen — DATEV rechnet Stunden × aktualisierter Stundenlohn.",
+    )
 
-    st.success(
-        f"**So importierst du `{out_name}` in DATEV Lohn und Gehalt:**\n\n"
-        f"1. DATEV LuG öffnen, **Mandant {firma}** wählen\n"
-        f"2. Menü **`Erfassen → Bewegungsdaten → Importieren`**\n"
-        f"3. **Importprofil wählen** (einmalig vorher angelegt unter "
-        f"`Extras → ASCII-Import Assistent`: 9 Spalten, Trennzeichen Semikolon, "
-        f"Encoding ANSI/CP1252)\n"
-        f"4. Heruntergeladene CSV auswählen → **Importieren**\n\n"
-        f"⚠️ Krank-Tage werden separat in DATEV-Kalender gepflegt (nicht in CSV).  \n"
-        f"ℹ️ **Stundensatz** wird bei allen Stunden-Lohnarten in Spalte 6 "
-        f"(Abweichender Faktor) mitgegeben – DATEV nutzt diesen Wert vorrangig "
-        f"vor dem Stamm-Stundensatz. Heißt: kein manuelles Stamm-Update mehr "
-        f"nötig pro Monat."
+    st.info(
+        f"**Import-Reihenfolge in DATEV für {firma}:**\n\n"
+        f"1️⃣ **Stammdaten-CSV** → `Stammdaten → ASCII-Import-Assistent` → Stunden-/Tagelöhne (Stundenlohn EUR, historisiert)\n\n"
+        f"2️⃣ **Bewegungsdaten-CSV** → `Erfassen → Bewegungsdaten → Importieren` → Profil `Huen Monat 2` → Tab Monatserfassung\n\n"
+        f"DATEV rechnet danach automatisch: **Stunden × Stamm-Stundenlohn = Brutto**.\n\n"
+        f"⚠️ Krank-Tage werden separat in DATEV-Kalender gepflegt (nicht in CSV)."
     )
 
     with st.expander("Werte-Vorschau"):
