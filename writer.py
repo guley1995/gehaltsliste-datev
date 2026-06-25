@@ -165,8 +165,12 @@ def _kann_encoden(ch: str, encoding: str) -> bool:
 
 
 def _punkt(value: float) -> str:
-    """Stammdaten-CSV nutzt Punkt als Dezimaltrennzeichen (15.50)."""
-    return f"{value:.2f}"
+    """Stammdaten-CSV nutzt Punkt als Dezimaltrennzeichen.
+    4 Nachkommastellen, damit DATEV-übliche 3-Stellen-Stundenlöhne
+    (z.B. 15,025) NICHT auf 15,03 gerundet werden."""
+    s = f"{value:.4f}"
+    s = s.rstrip("0").rstrip(".")
+    return s if s else "0"
 
 
 def baue_stammdaten_csv(
