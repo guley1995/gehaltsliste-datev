@@ -123,12 +123,14 @@ def baue_csv(
 
 def _punkt(value: float) -> str:
     """Stammdaten-CSV nutzt Punkt als Dezimaltrennzeichen.
-    4 Nachkommastellen, damit DATEV-übliche 3-Stellen-Stundenlöhne
-    (z.B. 15,025) NICHT auf 15,03 gerundet werden."""
-    s = f"{value:.4f}"
-    # Trailing-Nullen entfernen für Lesbarkeit (15.0250 -> 15.025, 14.00 -> 14.0)
-    s = s.rstrip("0").rstrip(".")
-    return s if s else "0"
+    Mindestens 2, höchstens 4 Nachkommastellen — damit DATEV-übliche
+    3-Stellen-Stundenlöhne (z.B. 15,025) NICHT auf 15,03 gerundet
+    werden und runde Werte trotzdem als 14.00 erscheinen."""
+    s = f"{value:.4f}"  # z.B. "15.0250" oder "14.0000"
+    # Trailing-Nullen entfernen, aber mindestens 2 Nachkommastellen behalten
+    while s.endswith("0") and len(s.split(".")[1]) > 2:
+        s = s[:-1]
+    return s
 
 
 def baue_stammdaten_csv(
