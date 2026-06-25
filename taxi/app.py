@@ -191,16 +191,39 @@ def _auto_save_widget():
 # ─── Session State Init ───────────────────────────────────────────────
 if "mandanten" not in st.session_state:
     st.session_state["mandanten"] = {}  # { firma: {beraternr, mandantennr} }
+if "pers_mapping" not in st.session_state:
+    # { firma: { Excel-Name: DATEV-PersNr } }  — die PersNr aus Spalte B der
+    # Taxi-Excel ist eine Firma-interne Taxi-Nr, NICHT die DATEV-PersNr.
+    st.session_state["pers_mapping"] = {}
 
 if "ls_load_done" not in st.session_state:
     st.session_state["ls_load_done"] = True
     _data = _ls_load_at_start()
     if _data and isinstance(_data, dict):
         st.session_state["mandanten"].update(_data.get("mandanten") or {})
+        st.session_state["pers_mapping"].update(_data.get("pers_mapping") or {})
 
 
 def _persist():
-    _ls_persist({"mandanten": st.session_state["mandanten"]})
+    _ls_persist({
+        "mandanten": st.session_state["mandanten"],
+        "pers_mapping": st.session_state["pers_mapping"],
+    })
+
+
+def _bulk_parse(text: str) -> dict:
+    """'Name;PersNr' pro Zeile -> {name: persnr}. Auch Tab/Komma/Pipe."""
+    out = {}
+    for line in (text or "").splitlines():
+        for sep in (";", "\t", "|", ","):
+            if sep in line:
+                parts = line.split(sep, 1)
+                if len(parts) == 2:
+                    name, pn = parts[0].strip(), parts[1].strip()
+                    if name and pn:
+                        out[name] = pn
+                break
+    return out
 
 
 def _fuzzy_mandant(extracted: str, dct: dict):
@@ -219,8 +242,9 @@ def _fuzzy_mandant(extracted: str, dct: dict):
 
 st.title("Taxi-Lohnliste → DATEV Lohn und Gehalt")
 st.caption(
-    "Excel-Lohnliste hochladen → CSV erzeugen. PersNr kommen direkt aus der Excel "
-    "(Spalte B). Daten bleiben im Browser."
+    "Excel-Lohnliste hochladen → CSV erzeugen. Pro Firma einmalig Name → DATEV-PersNr "
+    "zuordnen (Spalte B in Excel ist Firma-interne Taxi-Nr, nicht DATEV-PersNr). "
+    "Daten bleiben im Browser."
 )
 
 
@@ -232,10 +256,13 @@ with st.sidebar:
 
     _auto_save_widget()
 
-    if st.session_state["mandanten"]:
+    if st.session_state["mandanten"] or st.session_state["pers_mapping"]:
         st.download_button(
             "⬇️ Backup als JSON (manuell)",
-            data=json.dumps({"mandanten": st.session_state["mandanten"]}, indent=2, ensure_ascii=False),
+            data=json.dumps({
+                "mandanten": st.session_state["mandanten"],
+                "pers_mapping": st.session_state["pers_mapping"],
+            }, indent=2, ensure_ascii=False),
             file_name=f"taxi_datev_backup_{date.today().isoformat()}.json",
             mime="application/json",
             use_container_width=True,
@@ -253,10 +280,17 @@ with st.sidebar:
                 data = json.loads(imp.read().decode("utf-8"))
                 if isinstance(data, dict):
                     mandanten = data.get("mandanten") or data
+                    pers_mapping = data.get("pers_mapping") or {}
                     if isinstance(mandanten, dict):
                         st.session_state["mandanten"].update(mandanten)
+                        if isinstance(pers_mapping, dict):
+                            st.session_state["pers_mapping"].update(pers_mapping)
                         _persist()
-                        st.success(f"✅ {len(mandanten)} Mandanten geladen.")
+                        msg = f"✅ {len(mandanten)} Mandanten geladen."
+                        if pers_mapping:
+                            n_pers = sum(len(v) for v in pers_mapping.values())
+                            msg += f" {n_pers} PersNr-Mappings."
+                        st.success(msg)
                     else:
                         st.error("Format unerkannt.")
                 else:
@@ -281,13 +315,13 @@ with st.sidebar:
         st.markdown(
             """
 - **Excel-Format:** Sheet1, Header in Zeile 4, Daten ab Zeile 6
-- **PersNr** wird direkt aus Spalte B genommen (kein Mapping nötig wie bei Mietwagen)
-- **Stundensatz** (Spalte S) wird bei LA 1000 als Abweichender Faktor mitgegeben
+- **PersNr-Mapping:** Excel-Spalte B ist die Firma-interne Taxi-Nr, **nicht** die DATEV-PersNr. Pro Firma einmalig Name → DATEV-PersNr eintragen — danach im Browser gespeichert.
+- **Stundensatz** (Spalte S) wird in Stammdaten-CSV mit Historie geschrieben
 - **Vorschuss / Abschlag** werden als negative Werte gebucht
 - **Brutto** (Spalte K) ist nur Kontroll-Summe, nicht importiert
 - **Soz.A** wird NICHT importiert — Lohnart unklar, manuell prüfen
-- **DATEV-Profil**: gleich wie Mietwagen (Huen Monat 2, 9 Spalten Monatserfassung)
-- **Import in DATEV**: Erfassen → Bewegungsdaten → Importieren → Tab Monatserfassung
+- **DATEV-Profil**: Bewegungsdaten Huen Monat 2 (9 Spalten Monatserfassung)
+- **Import-Reihenfolge:** 1. Stammdaten-CSV (`Stammdaten → ASCII-Import`), 2. Bewegungsdaten-CSV (`Erfassen → Bewegungsdaten → Importieren`)
 """
         )
 
@@ -337,6 +371,77 @@ for idx, f in enumerate(uploads):
 
     if not beraternr.strip() or not mandantennr.strip():
         st.warning("⚠️ Ohne Berater- und Mandantennummer wird der Import in DATEV abgelehnt.")
+
+    # ── PersNr-Mapping pro Firma ─────────────────────────────────────
+    firma_map = st.session_state["pers_mapping"].setdefault(firma, {})
+
+    # Hinweis wenn nicht zugeordnete Mitarbeiter
+    keine_persnr = [ma for ma in parse.mitarbeiter if not firma_map.get(ma.name)]
+    if keine_persnr:
+        st.warning(
+            "⚠️ **Diese Mitarbeiter werden NICHT in die CSV exportiert — DATEV-PersNr fehlt:**  \n"
+            + "  \n".join(
+                f"• **{ma.name}** (Excel-Taxi-Nr: {ma.pers_nr or '—'})"
+                for ma in keine_persnr
+            )
+            + "  \n\nBitte unten die DATEV-PersNr eintragen."
+        )
+
+    # Bulk-Eingabe
+    with st.expander("💡 Bulk-Eingabe: alle PersNr auf einmal"):
+        st.caption(
+            "Format pro Zeile: `Name;PersNr` (Tab, Komma oder Pipe gehen auch). "
+            "Z.B. aus DATEV-Mitarbeiterliste kopieren. Namen werden exakt verglichen."
+        )
+        bulk = st.text_area("Bulk", height=120, key=f"bulk_{idx}",
+                            label_visibility="collapsed",
+                            placeholder="Minh Quang Le;42\nRabei Dallw;17\n...")
+        if st.button("Übernehmen", key=f"bulk_apply_{idx}"):
+            bulk_map = _bulk_parse(bulk)
+            matched, unmatched = 0, []
+            ma_namen = {ma.name for ma in parse.mitarbeiter}
+            for name, pn in bulk_map.items():
+                if name in ma_namen:
+                    firma_map[name] = pn
+                    st.session_state[f"pn_{idx}_{name}"] = pn
+                    matched += 1
+                else:
+                    unmatched.append(name)
+            _persist()
+            if matched:
+                st.success(f"{matched} PersNr übernommen.")
+            if unmatched:
+                st.warning("Nicht zugeordnet (Name nicht in Excel): " + ", ".join(unmatched))
+            st.rerun()
+
+    st.markdown("##### Personalnummer-Mapping (Excel-Name → DATEV-PersNr)")
+    changed_any = False
+    for ma in parse.mitarbeiter:
+        cols = st.columns([3, 1, 3])
+        cols[0].write(ma.name)
+        default = firma_map.get(ma.name, "")
+        pn = cols[1].text_input(
+            "PersNr", value=default,
+            key=f"pn_{idx}_{ma.name}",
+            label_visibility="collapsed",
+            placeholder="DATEV-PersNr",
+        )
+        cols[2].caption(f"Excel-Taxi-Nr: {ma.pers_nr or '—'}")
+        pn = pn.strip()
+        if pn:
+            if firma_map.get(ma.name) != pn:
+                firma_map[ma.name] = pn
+                changed_any = True
+            ma.pers_nr = pn
+        elif ma.name in firma_map:
+            del firma_map[ma.name]
+            changed_any = True
+            ma.pers_nr = None
+        else:
+            ma.pers_nr = None  # Excel-PersNr ignorieren wenn kein Mapping
+
+    if changed_any:
+        _persist()
 
     # Bewegungsdaten-CSV bauen
     csv_text, stat = baue_csv(parse.mitarbeiter, int(jahr), int(monat),
