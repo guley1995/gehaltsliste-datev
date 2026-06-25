@@ -84,9 +84,10 @@ def baue_csv(
         for lohnart, betrag in ma.werte.items():
             der_wert = _komma(betrag)
 
-            # Stundensatz-Override nur bei LA 1000 (Grundlohn)
+            # Stundensatz-Override bei ALLEN Stunden-Lohnarten (Spalte 6 Abw. Faktor)
             faktor = ""
-            if lohnart == "1000" and ma.stundensatz > 0:
+            feld = LOHNART_FELD.get(lohnart, "wert")
+            if feld == "stunden" and ma.stundensatz > 0:
                 faktor = _komma(ma.stundensatz)
 
             zeile = ";".join([

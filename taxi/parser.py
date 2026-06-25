@@ -149,6 +149,19 @@ def parse_excel(file_bytes: bytes) -> ParseResult:
                 continue
             if m.get("vorzeichen_umkehren"):
                 val = -abs(val)  # immer negativ (für Vorschuss / Abschlag)
+            # Stunden-Umrechnung: EUR / (Stundensatz × Prozent)
+            if m.get("umrechnen") == "eur_zu_std":
+                if zeile.stundensatz <= 0:
+                    zeile.warnungen.append(
+                        f"{m['label']}: Umrechnung €→Std nicht möglich, "
+                        f"Stundensatz fehlt oder ist 0 (Excel-Spalte {STUNDENSATZ_COL})."
+                    )
+                    continue
+                prozent = m.get("prozent", 1.0)
+                divisor = zeile.stundensatz * prozent
+                if divisor == 0:
+                    continue
+                val = val / divisor
             zeile.werte[m["lohnart"]] = round(val, 2)
 
         for u, col_idx in manuell_cols:
@@ -157,22 +170,10 @@ def parse_excel(file_bytes: bytes) -> ParseResult:
                 zeile.manuell_werte[u["excel_header"]] = val
 
         zeile.soll_brutto = _zahl(ws.cell(r, brutto_idx).value)
-
-        # Plausibilitäts-Check: Summe Lohnarten ohne Vorschuss/Abschlag/Urlaub
-        # sollte ~ Brutto sein. Toleranz 50 € — Brutto-Berechnung variiert je Firma,
-        # daher konservative Schwelle.
-        importable_summe = sum(
-            v for la, v in zeile.werte.items()
-            if la not in ("9000", "9001", "1600")  # Vorschuss/Abschlag/Urlaub nicht im Brutto
-        )
-        if zeile.soll_brutto > 0:
-            diff = abs(importable_summe - zeile.soll_brutto)
-            if diff > 50.0:
-                zeile.warnungen.append(
-                    f"Plausibilität: Importwerte-Summe {importable_summe:.2f} € weicht "
-                    f"deutlich von Brutto {zeile.soll_brutto:.2f} € ab ({diff:.2f} €). "
-                    f"Bitte Excel prüfen."
-                )
+        # Plausibilitäts-Check entfernt: nach Umrechnung EUR→Stunden lässt sich
+        # die Importwerte-Summe nicht mehr direkt mit Excel-Brutto vergleichen.
+        # Stattdessen kann die Buchhalterin den DATEV-Brutto nach Import mit
+        # Excel-Brutto vergleichen.
 
         mitarbeiter.append(zeile)
 

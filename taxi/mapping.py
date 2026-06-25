@@ -22,20 +22,22 @@ DATEN_START_ROW = 6  # Zeile 5 ist meist leer
 INFO_COL = "T"
 
 LOHNART_MAPPING = [
-    # Alle Lohnarten sind EUR-Beträge (im Gegensatz zu Mietwagen wo viele Stunden waren)
-    {"excel_col": "D", "excel_header": "Grundlohn",         "lohnart": "1000", "feld": "wert", "label": "Stundenlohn / Grundlohn"},
+    # Stunden-Lohnarten: EUR aus Excel → Stunden = EUR / (Stundensatz × Prozent)
+    # Beispiel 25% ZS: 16,52 € / (21,53 × 0,25) = 3,07 h
+    # DATEV bekommt die Stunden in Spalte 5 (Wert) + Stundensatz in Spalte 6 (Abw. Faktor)
+    {"excel_col": "D", "excel_header": "Grundlohn",         "lohnart": "1000", "feld": "stunden", "label": "Stundenlohn / Grundlohn",     "umrechnen": "eur_zu_std", "prozent": 1.00},
+    {"excel_col": "F", "excel_header": "25% ZS",            "lohnart": "1500", "feld": "stunden", "label": "Nachtzuschlag 25% frei",      "umrechnen": "eur_zu_std", "prozent": 0.25},
+    {"excel_col": "G", "excel_header": "40% ZS",            "lohnart": "1501", "feld": "stunden", "label": "Nachtzuschlag 40% frei",      "umrechnen": "eur_zu_std", "prozent": 0.40},
+    {"excel_col": "H", "excel_header": "50% ZS",            "lohnart": "1510", "feld": "stunden", "label": "Sonntagszuschlag 50% frei",   "umrechnen": "eur_zu_std", "prozent": 0.50},
+    {"excel_col": "I", "excel_header": "125% ZS",           "lohnart": "1520", "feld": "stunden", "label": "Feiertagszuschlag 125% frei", "umrechnen": "eur_zu_std", "prozent": 1.25},
+    {"excel_col": "J", "excel_header": "150% ZS",           "lohnart": "1521", "feld": "stunden", "label": "Zuschlag 150% frei",          "umrechnen": "eur_zu_std", "prozent": 1.50},
+    {"excel_col": "Q", "excel_header": "Urlaubsentgeld",    "lohnart": "1600", "feld": "stunden", "label": "Urlaub (EUR/Stundensatz → Std)", "umrechnen": "eur_zu_std", "prozent": 1.00},
+    # EUR-Lohnarten direkt
     {"excel_col": "E", "excel_header": "Verpfl. ZS",        "lohnart": "9650", "feld": "wert", "label": "Verpflegungszuschuss"},
-    {"excel_col": "F", "excel_header": "25% ZS",            "lohnart": "1500", "feld": "wert", "label": "Nachtzuschlag 25% frei"},
-    {"excel_col": "G", "excel_header": "40% ZS",            "lohnart": "1501", "feld": "wert", "label": "Nachtzuschlag 40% frei"},
-    {"excel_col": "H", "excel_header": "50% ZS",            "lohnart": "1510", "feld": "wert", "label": "Sonntagszuschlag 50% frei"},
-    {"excel_col": "I", "excel_header": "125% ZS",           "lohnart": "1520", "feld": "wert", "label": "Feiertagszuschlag 125% frei"},
-    {"excel_col": "J", "excel_header": "150% ZS",           "lohnart": "1521", "feld": "wert", "label": "Zuschlag 150% frei"},
-    # Abschlag (Spalte L) = ausgezahltes Bargeld, in DATEV als negative Buchung (Einbehaltenes Bargeld)
+    # Abschlag (Spalte L) = ausgezahltes Bargeld → negative Buchung
     {"excel_col": "L", "excel_header": "Abschlag",          "lohnart": "9001", "feld": "wert", "label": "Einbehaltenes Bargeld", "vorzeichen_umkehren": True},
     # Vorschuss (Spalte M) als Abzug
-    {"excel_col": "M", "excel_header": "Vorschuss",         "lohnart": "9000", "feld": "wert", "label": "Vorschuss", "vorzeichen_umkehren": True},
-    # Urlaubsentgeld (Q) direkt als EUR — bei Taxi ist es bereits berechnet, nicht durch Stundensatz teilen
-    {"excel_col": "Q", "excel_header": "Urlaubsentgeld",    "lohnart": "1600", "feld": "wert", "label": "Urlaub (EUR direkt)"},
+    {"excel_col": "M", "excel_header": "Vorschuss",         "lohnart": "9000", "feld": "wert", "label": "Vorschuss",             "vorzeichen_umkehren": True},
 ]
 
 # Werte aus diesen Spalten werden in der App nur als Hinweis angezeigt, nicht importiert.
